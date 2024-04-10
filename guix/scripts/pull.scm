@@ -76,8 +76,7 @@
     (graft? . #t)
     (debug . 0)
     (verbosity . 1)
-    (authenticate-channels? . #t)
-    (validate-pull . ,ensure-forward-channel-update)))
+    (authenticate-channels? . #t)))
 
 (define (show-help)
   (display (G_ "Usage: guix pull [OPTION]...
@@ -94,7 +93,8 @@ Download and deploy the latest version of Guix.\n"))
   (display (G_ "
       --branch=BRANCH    download the tip of the specified \"guix\" channel BRANCH"))
   (display (G_ "
-      --allow-downgrades allow downgrades to earlier channel revisions"))
+  -a, --allow-downgrades[=CHANNELS]
+                         allow downgrades to earlier revisions of specified CHANNELS"))
   (display (G_ "
       --disable-authentication
                          disable channel authentication"))
@@ -176,10 +176,36 @@ Download and deploy the latest version of Guix.\n"))
          (option '("branch") #t #f
                  (lambda (opt name arg result)
                    (alist-cons 'ref `(branch . ,arg) result)))
-         (option '("allow-downgrades") #f #f
+         ;; comma-separated list. Possible specification:
+         ;; -a channel1 -a channel2,channel3 -a channel4 -achannel5
+         (option '(#\a "allow-downgrades")
+                 #f ;; required-arg
+                 #t ;; optional-arg
+;;; required-arg? and optional-arg? are mutually exclusive; one or both must be #f.
+;;;
+;;; If required-arg?, the option must be followed by an argument on the command line,
+;;; such as ‘--opt=value’ for long options, or an error will be signalled.
+;;;
+;;; If optional-arg?, an argument will be taken if available.
                  (lambda (opt name arg result)
-                   (alist-cons 'validate-pull warn-about-backward-updates
-                               result)))
+                   (cond
+                    [(string? arg)
+                     ((compose
+                       (cut alist-cons 'allow-downgrades <>
+                            (alist-delete 'allow-downgrades result))
+                       (cut append
+                            (or (assoc-ref result 'allow-downgrades)
+                                (list))
+                            <>))
+                      (string-tokenize arg (char-set-complement (char-set #\,))))]
+                    [(boolean? arg)
+                     ;; `allow-downgrades' is present, however with no value
+                     ;; specified is interpreted as 'all channels can be
+                     ;; downgraded'
+                     (alist-cons 'allow-downgrades #t result)]
+                    [else
+                     (leave (G_ "Internal Error: Unrecognized value of \"allow-downgrades\" : '~a'~%")
+                            arg)])))
          (option '("disable-authentication") #f #f
                  (lambda (opt name arg result)
                    (alist-cons 'authenticate-channels? #f result)))
@@ -844,7 +870,7 @@ Use '~/.config/guix/channels.scm' instead."))
             (dry-run?     (assoc-ref opts 'dry-run?))
             (profile      (or (assoc-ref opts 'profile) %current-profile))
             (current-channels (profile-channels profile))
-            (validate-pull    (assoc-ref opts 'validate-pull))
+            (allow-downgrades (assoc-ref opts 'allow-downgrades))
             (authenticate?    (assoc-ref opts 'authenticate-channels?)))
        (cond
         ((assoc-ref opts 'query)
@@ -868,39 +894,72 @@ Use '~/.config/guix/channels.scm' instead."))
                  (set-build-options-from-command-line store opts)
                  (ensure-default-profile)
                  (honor-x509-certificates store)
+                 (let* [(channels (channel-list opts))
+                        ;; Only current-channels can be checked against
+                        ;; downgrade-attack. New channels can't be downgraded
+                        ;; since their commit history is empty.
+                        (current-channels-with-validation
+                         (cond
+                          [(and (list? allow-downgrades) (not (null? allow-downgrades)))
+                           (let* [(downgradable-channels (map string->symbol
+                                                              allow-downgrades))
+                                  (current-channel-names (map channel-name current-channels))]
+                             (map (lambda (channel)
+                                    (unless (member channel current-channel-names)
+                                      (leave (G_ "'~a' is not among known channels: ~a~%")
+                                             channel current-channel-names)))
+                                  downgradable-channels)
 
-                 (let* ((channels (channel-list opts))
-                        (instances
-                         (latest-channel-instances store channels
-                                                   #:current-channels
-                                                   current-channels
-                                                   #:validate-pull
-                                                   validate-pull
-                                                   #:authenticate?
-                                                   authenticate?)))
-                   (format (current-error-port)
-                           (N_ "Building from this channel:~%"
-                               "Building from these channels:~%"
-                               (length instances)))
-                   (for-each (lambda (instance)
-                               (let ((channel
-                                      (channel-instance-channel instance)))
-                                 (format (current-error-port)
-                                         "  ~10a~a\t~a~%"
-                                         (channel-name channel)
-                                         (channel-url channel)
-                                         (string-take
-                                          (channel-instance-commit instance)
-                                          7))))
-                             instances)
-                   (parameterize ((%guile-for-build
-                                   (package-derivation
-                                    store
-                                    (if (assoc-ref opts 'bootstrap?)
-                                        %bootstrap-guile
-                                        (default-guile)))))
-                     (with-profile-lock profile
-                       (run-with-store store
-                         (build-and-install instances profile)))))))))))))))
+                             (let* [(warn-only (filter (cut member <> downgradable-channels)
+                                                       current-channel-names))
+                                    (ensure (lset-difference equal? current-channel-names
+                                                             warn-only))
+                                    (warn-only-current-channels
+                                     (filter (lambda (ch) (member (channel-name ch) warn-only))
+                                             current-channels))
+                                    (ensure-current-channels
+                                     (lset-difference equal? current-channels
+                                                      warn-only-current-channels))]
+                               (append
+                                (map (lambda (ch) (cons ch warn-about-backward-updates))
+                                     warn-only-current-channels)
+                                (map (lambda (ch) (cons ch ensure-forward-channel-update))
+                                     ensure-current-channels))))]
+                          [(and (boolean? allow-downgrades) allow-downgrades)
+                           (map (lambda (ch) (cons ch warn-about-backward-updates))
+                                current-channels)]
+                          [else
+                           (map (lambda (ch) (cons ch ensure-forward-channel-update))
+                                current-channels)]))]
+                   (let* [(instances
+                           (latest-channel-instances store channels
+                                                     #:current-channels-with-validation
+                                                     current-channels-with-validation
+                                                     #:authenticate?
+                                                     authenticate?))]
+                     (format (current-error-port)
+                             (N_ "Building from this channel:~%"
+                                 "Building from these channels:~%"
+                                 (length instances)))
+                     (for-each (lambda (instance)
+                                 (let ((channel
+                                        (channel-instance-channel instance)))
+                                   (format (current-error-port)
+                                           "  ~10a~a\t~a~%"
+                                           (channel-name channel)
+                                           (channel-url channel)
+                                           (string-take
+                                            (channel-instance-commit instance)
+                                            7))))
+                               instances)
+                     (parameterize ((%guile-for-build
+                                     (package-derivation
+                                      store
+                                      (if (assoc-ref opts 'bootstrap?)
+                                          %bootstrap-guile
+                                          (default-guile)))))
+                       (with-profile-lock profile
+                         (run-with-store store
+                           (build-and-install instances profile))))))))))))))))
 
 ;;; pull.scm ends here
