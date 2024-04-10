@@ -95,7 +95,8 @@ Download and deploy the latest version of Guix.\n"))
   (display (G_ "
       --branch=BRANCH    download the tip of the specified \"guix\" channel BRANCH"))
   (display (G_ "
-      --allow-downgrades allow downgrades to earlier channel revisions"))
+  -a, --allow-downgrades[=CHANNELS]
+                         allow downgrades to earlier revisions of CHANNELS"))
   (display (G_ "
       --disable-authentication
                          disable channel authentication"))
@@ -180,10 +181,37 @@ Download and deploy the latest version of Guix.\n"))
          (option '("branch") #t #f
                  (lambda (opt name arg result)
                    (alist-cons 'ref `(branch . ,arg) result)))
-         (option '("allow-downgrades") #f #f
+         (option '(#\a "allow-downgrades") #f #t
                  (lambda (opt name arg result)
-                   (alist-cons 'validate-pull warn-about-backward-updates
-                               result)))
+                   (cond
+                    ((string? arg)
+                     ((compose
+                       (cut alist-cons 'allow-downgrades <>
+                            (alist-delete 'allow-downgrades result))
+                       (cut append
+                            (or (assoc-ref result 'allow-downgrades)
+                                (list))
+                            <>))
+                      ;; Values may be also comma-separated. Possibilities:
+                      ;; -a val1 -a val2,val3 -a val4 -aval5
+                      (string-tokenize arg
+                                       (char-set-complement (char-set #\,)))))
+                    ((boolean? arg)
+                     ;; The command contains this option with no value
+                     ;; specified, (`arg' is #f). We'll interpreted this as
+                     ;; 'all channels can be downgraded'
+                     (alist-cons 'allow-downgrades #t result))
+                    (else
+                     ((compose
+                       (lambda (text)
+                         (raise (condition (&message (message text)))))
+                       (cut format #f <>
+                            "You found a bug:" arg name
+                            version system %guix-version
+                            %guix-bug-report-address))
+                      "~a The value '~a' of the '~a' option is unrecognized.
+(version: ~s; system: ~s; host version: ~s)
+Please report the COMPLETE output above by email to <~a>.~%")))))
          (option '("disable-authentication") #f #f
                  (lambda (opt name arg result)
                    (alist-cons 'authenticate-channels? #f result)))
@@ -801,6 +829,41 @@ Use '~/.config/guix/channels.scm' instead."))
 @command{sudo -i} or equivalent if you really want to pull as ~a.")
                        dir:user our:user)))))))))))
 
+(define (channels-with-validations downgradable-candidates channels)
+  "Return a list of pairs: channel + validate-pull procedure. The procedure
+is `warn-about-backward-updates' if a given channel is among the
+DOWNGRADABLE-CANDIDATES or `ensure-forward-channel-update' otherwise. E.g.:
+
+((channel1 . #<procedure warn-about-backward-updates ...>)
+ (channel2 . #<procedure ensure-forward-channel-update ...>))"
+  (cond
+   ((and (list? downgradable-candidates) (not (null? downgradable-candidates)))
+    (let ((downgradables-candidate-names (map string->symbol
+                                              downgradable-candidates))
+          (channels-names (map channel-name channels)))
+      (map (lambda (name)
+             (unless (member name channels-names)
+               (leave (G_ "'~a' must be one of '~a~'%") name channels-names)))
+           downgradables-candidate-names)
+      (let* ((downgradables-names
+              (filter (cut member <> downgradables-candidate-names)
+                      channels-names))
+             (downgradables
+              (filter (compose (cut member <> downgradables-names)
+                               (cut channel-name <>))
+                      channels))
+             (non-downgradables (lset-difference equal? channels
+                                                 downgradables)))
+        (append
+         (map (cut cons <> warn-about-backward-updates) downgradables)
+         (map (cut cons <> ensure-forward-channel-update) non-downgradables)))))
+
+   ((and (boolean? downgradable-candidates) downgradable-candidates)
+    (map (cut cons <> warn-about-backward-updates) channels))
+
+   (else
+    (map (cut cons <> ensure-forward-channel-update) channels))))
+
 
 (define-command (guix-pull . args)
   (synopsis "pull the latest revision of Guix")
@@ -818,6 +881,7 @@ Use '~/.config/guix/channels.scm' instead."))
             (profile      (or (assoc-ref opts 'profile) %current-profile))
             (current-channels (profile-channels profile))
             (validate-pull    (assoc-ref opts 'validate-pull))
+            (allow-downgrades (assoc-ref opts 'allow-downgrades))
             (authenticate?    (assoc-ref opts 'authenticate-channels?))
             (verify-certificate? (assoc-ref opts 'verify-certificate?)))
        (cond
@@ -844,8 +908,16 @@ Use '~/.config/guix/channels.scm' instead."))
                  (honor-x509-certificates store)
 
                  (let* ((channels (channel-list opts))
+                        (channel-validation-pairs
+                         ;; Only current-channels can be checked against
+                         ;; downgrade-attacks. New channels can't be
+                         ;; downgraded. Their commit history is unknown yet.
+                         (channels-with-validations allow-downgrades
+                                                    current-channels))
                         (instances
                          (latest-channel-instances store channels
+                                                   #:channel-validation-pairs
+                                                   channel-validation-pairs
                                                    #:current-channels
                                                    current-channels
                                                    #:validate-pull

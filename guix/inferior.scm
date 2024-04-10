@@ -888,6 +888,7 @@ prefix, resolve it; and if 'commit' is unset, fetch CHANNEL's branch tip."
 (define* (cached-channel-instance store
                                   channels
                                   #:key
+                                  (channel-validation-pairs '())
                                   (authenticate? #t)
                                   (cache-directory (%inferior-cache-directory))
                                   (ttl (* 3600 24 30))
@@ -905,7 +906,12 @@ instances against REFERENCE-CHANNELS; it is passed as #:validate-pull to
 channel commit is deemed \"invalid\".
 
 When VERIFY-CERTIFICATE? is true, raise an error when encountering an invalid
-X.509 host certificate; otherwise, warn about the problem and keep going."
+X.509 host certificate; otherwise, warn about the problem and keep going.
+
+CHANNEL-VALIDATION-PAIRS must be a list of pairs (channel . validation-pull) where
+validation-pull is a four-argument procedure used to validate corresponding channel
+instance. This procedure 'latest-channel-instances' and should raise an exception in
+case a target channel commit is deemed \"invalid\"."
   (define commits
     ;; Since computing the instances of CHANNELS is I/O-intensive, use a
     ;; cheaper way to get the commit list of CHANNELS.  This limits overhead
@@ -971,6 +977,8 @@ X.509 host certificate; otherwise, warn about the problem and keep going."
       (run-with-store store
         (mlet* %store-monad ((instances
                               -> (latest-channel-instances store channels
+                                                           #:channel-validation-pairs
+                                                           channel-validation-pairs
                                                            #:authenticate?
                                                            authenticate?
                                                            #:current-channels

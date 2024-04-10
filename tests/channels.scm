@@ -275,6 +275,8 @@
           (with-store store
             ;; Attempt a downgrade from NEW to OLD.
             (latest-channel-instances store (list old)
+                                      #:channel-validation-pairs
+                                      (list (cons new validate-pull))
                                       #:current-channels (list new)
                                       #:validate-pull validate-pull)))))))
 

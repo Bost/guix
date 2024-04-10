@@ -199,6 +199,8 @@ to %OLDEST-POSSIBLE-COMMIT is not that of an ancestor."
                                                        #:dry-run? #f)
                      (set-build-options-from-command-line store opts)
                      (cached-channel-instance store channels
+                                              #:channel-validation-pairs
+                                              channel-validation-pairs
                                               #:authenticate? authenticate?
                                               #:reference-channels
                                               %reference-channels

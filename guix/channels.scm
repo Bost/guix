@@ -510,6 +510,7 @@ information."
 
 (define* (latest-channel-instances store channels
                                    #:key
+                                   (channel-validation-pairs '())
                                    (current-channels '())
                                    (authenticate? #t)
                                    (validate-pull
@@ -527,13 +528,29 @@ accepted.
 CURRENT-CHANNELS is the list of currently used channels.  It is compared
 against the newly-fetched instances of CHANNELS, and VALIDATE-PULL is called
 for each channel update and can choose to emit warnings or raise an error,
-depending on the policy it implements."
+depending on the policy it implements.
+
+CHANNEL-VALIDATION-PAIRS is a list of pairs of currently used channels with their
+respective validation procedures: (current-channel . validate-pull).  The
+current-channel is compared against the newly-fetched instances of CHANNELS, and its
+validate-pull procedure is called for each channel update and can choose to emit
+warnings or raise an error, depending on the policy it implements."
   (define (current-commit name)
-    ;; Return the current commit for channel NAME.
-    (any (lambda (channel)
-           (and (eq? (channel-name channel) name)
-                (channel-commit channel)))
-         current-channels))
+    "Return the current commit for channel NAME."
+    (any (lambda (channel-with-validation)
+           (let ((channel (car channel-with-validation)))
+             (and (eq? (channel-name channel) name)
+                  (channel-commit channel))))
+         channel-validation-pairs))
+
+  (define (current-validate-pull name)
+    "Return the desired validate-pull procedure for channel NAME."
+    (any (lambda (channel-with-validation)
+           (let ((channel (car channel-with-validation))
+                 (validate-pull (cdr channel-with-validation)))
+             (and (eq? (channel-name channel) name)
+                  validate-pull)))
+         channel-validation-pairs))
 
   (define instance-name
     (compose channel-name channel-instance-channel))
@@ -561,7 +578,10 @@ depending on the policy it implements."
          (if (and previous
                   (not (more-specific? channel previous)))
              (loop rest previous-channels instances)
-             (begin
+             (let ((current (current-commit (channel-name channel)))
+                   (validate-pull (current-validate-pull (channel-name channel))))
+               ;; (format #t "channel '~a' is validated by '~a'~%"
+               ;;         (channel-name channel) (procedure-name validate-pull))
                (format (current-error-port)
                        (G_ "Updating channel '~a' from Git repository at '~a'...~%")
                        (channel-name channel)
@@ -1053,6 +1073,7 @@ process."
 
 (define* (latest-channel-derivation #:optional (channels %default-channels)
                                     #:key
+                                    (channel-validation-pairs '())
                                     (current-channels '())
                                     (validate-pull
                                      ensure-forward-channel-update))
@@ -1061,6 +1082,8 @@ latest instances of CHANNELS.  CURRENT-CHANNELS and VALIDATE-PULL are passed
 to 'latest-channel-instances'."
   (mlet %store-monad ((instances
                        (latest-channel-instances* channels
+                                                  #:channel-validation-pairs
+                                                  channel-validation-pairs
                                                   #:current-channels
                                                   current-channels
                                                   #:validate-pull
