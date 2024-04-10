@@ -872,17 +872,16 @@ prefix, resolve it; and if 'commit' is unset, fetch CHANNEL's branch tip."
                                   (authenticate? #t)
                                   (cache-directory (%inferior-cache-directory))
                                   (ttl (* 3600 24 30))
-                                  (reference-channels '())
-                                  (validate-channels (const #t)))
+                                  (channel-validation-pairs '()))
   "Return a directory containing a guix filetree defined by CHANNELS, a list of channels.
 The directory is a subdirectory of CACHE-DIRECTORY, where entries can be
 reclaimed after TTL seconds.  This procedure opens a new connection to the
 build daemon.  AUTHENTICATE? determines whether CHANNELS are authenticated.
 
-VALIDATE-CHANNELS must be a four-argument procedure used to validate channel
-instances against REFERENCE-CHANNELS; it is passed as #:validate-pull to
-'latest-channel-instances' and should raise an exception in case a target
-channel commit is deemed \"invalid\"."
+CHANNEL-VALIDATION-PAIRS must be a list of pairs (channel . validation-pull) where
+validation-pull is a four-argument procedure used to validate corresponding channel
+instance. This procedure 'latest-channel-instances' and should raise an exception in
+case a target channel commit is deemed \"invalid\"."
   (define commits
     ;; Since computing the instances of CHANNELS is I/O-intensive, use a
     ;; cheaper way to get the commit list of CHANNELS.  This limits overhead
@@ -935,10 +934,8 @@ channel commit is deemed \"invalid\"."
                               -> (latest-channel-instances store channels
                                                            #:authenticate?
                                                            authenticate?
-                                                           #:current-channels
-                                                           reference-channels
-                                                           #:validate-pull
-                                                           validate-channels))
+                                                           #:channel-validation-pairs
+                                                           channel-validation-pairs))
                              (profile
                               (channel-instances->derivation instances)))
           (mbegin %store-monad

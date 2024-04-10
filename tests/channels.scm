@@ -245,10 +245,8 @@
                     (string=? (channel-instance-commit instance1)
                               (channel-instance-commit instance2)))))))))))
 
-(test-equal "latest-channel-instances #:validate-pull"
+(test-equal "latest-channel-instances validate-pull"
   'descendant
-
-  ;; Make sure the #:validate-pull procedure receives the right values.
   (let/ec return
     (with-temporary-git-repository directory
         '((add "a.txt" "A")
@@ -275,8 +273,8 @@
           (with-store store
             ;; Attempt a downgrade from NEW to OLD.
             (latest-channel-instances store (list old)
-                                      #:current-channels (list new)
-                                      #:validate-pull validate-pull)))))))
+                                      #:channel-validation-pairs
+                                      (list (cons new validate-pull)))))))))
 
 (test-assert "channel-instances->manifest"
   ;; Compute the manifest for a graph of instances and make sure we get a

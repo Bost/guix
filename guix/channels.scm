@@ -497,26 +497,35 @@ information."
 
 (define* (latest-channel-instances store channels
                                    #:key
-                                   (current-channels '())
-                                   (authenticate? #t)
-                                   (validate-pull
-                                    ensure-forward-channel-update))
+                                   (channel-validation-pairs '())
+                                   (authenticate? #t))
   "Return a list of channel instances corresponding to the latest checkouts of
 CHANNELS and the channels on which they depend.
 
 When AUTHENTICATE? is true, authenticate the subset of CHANNELS that has a
 \"channel introduction\".
 
-CURRENT-CHANNELS is the list of currently used channels.  It is compared
-against the newly-fetched instances of CHANNELS, and VALIDATE-PULL is called
-for each channel update and can choose to emit warnings or raise an error,
-depending on the policy it implements."
+CHANNEL-VALIDATION-PAIRS is a list of pairs of currently used channels with their
+respective validation procedures: (current-channel . validate-pull).  The
+current-channel is compared against the newly-fetched instances of CHANNELS, and its
+validate-pull procedure is called for each channel update and can choose to emit
+warnings or raise an error, depending on the policy it implements."
   (define (current-commit name)
-    ;; Return the current commit for channel NAME.
-    (any (lambda (channel)
-           (and (eq? (channel-name channel) name)
-                (channel-commit channel)))
-         current-channels))
+    "Return the current commit for channel NAME."
+    (any (lambda (channel-with-validation)
+           (let ((channel (car channel-with-validation)))
+             (and (eq? (channel-name channel) name)
+                  (channel-commit channel))))
+         channel-validation-pairs))
+
+  (define (current-validate-pull name)
+    "Return the desired validate-pull procedure for channel NAME."
+    (any (lambda (channel-with-validation)
+           (let ((channel (car channel-with-validation))
+                 (validate-pull (cdr channel-with-validation)))
+             (and (eq? (channel-name channel) name)
+                  validate-pull)))
+         channel-validation-pairs))
 
   (define instance-name
     (compose channel-name channel-instance-channel))
@@ -544,20 +553,22 @@ depending on the policy it implements."
          (if (and previous
                   (not (more-specific? channel previous)))
              (loop rest previous-channels instances)
-             (begin
+             (let ((current (current-commit (channel-name channel)))
+                   (validate-pull (current-validate-pull (channel-name channel))))
+               ;; (format #t "channel '~a' is validated by '~a'~%"
+               ;;         (channel-name channel) (procedure-name validate-pull))
                (format (current-error-port)
                        (G_ "Updating channel '~a' from Git repository at '~a'...~%")
                        (channel-name channel)
                        (channel-url channel))
-               (let* ((current (current-commit (channel-name channel)))
-                      (instance
-                       (latest-channel-instance store channel
-                                                #:authenticate?
-                                                authenticate?
-                                                #:validate-pull
-                                                validate-pull
-                                                #:starting-commit
-                                                current)))
+               (let ((instance
+                      (latest-channel-instance store channel
+                                               #:authenticate?
+                                               authenticate?
+                                               #:validate-pull
+                                               validate-pull
+                                               #:starting-commit
+                                               current)))
                  (when authenticate?
                    ;; CHANNEL is authenticated so we can trust the
                    ;; primary URL advertised in its metadata and warn
@@ -1001,18 +1012,14 @@ channel instances."
 
 (define* (latest-channel-derivation #:optional (channels %default-channels)
                                     #:key
-                                    (current-channels '())
-                                    (validate-pull
-                                     ensure-forward-channel-update))
+                                    (channel-validation-pairs '()))
   "Return as a monadic value the derivation that builds the profile for the
 latest instances of CHANNELS.  CURRENT-CHANNELS and VALIDATE-PULL are passed
 to 'latest-channel-instances'."
   (mlet %store-monad ((instances
                        (latest-channel-instances* channels
-                                                  #:current-channels
-                                                  current-channels
-                                                  #:validate-pull
-                                                  validate-pull)))
+                                                  #:channel-validation-pairs
+                                                  channel-validation-pairs)))
     (channel-instances->derivation instances)))
 
 (define* (sexp->channel sexp #:optional (name 'channel))

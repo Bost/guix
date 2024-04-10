@@ -149,10 +149,6 @@ Execute COMMAND ARGS... in an older version of Guix.\n"))
 (define %oldest-possible-commit
   "4a0b87f0ec5b6c2dcf82b372dd20ca7ea6acdd9c") ;v0.16.0
 
-(define %reference-channels
-  (list (channel (inherit %default-guix-channel)
-                 (commit %oldest-possible-commit))))
-
 (define (validate-guix-channel channel start commit relation)
   "Raise an error if CHANNEL is the 'guix' channel and the RELATION of COMMIT
 to %OLDEST-POSSIBLE-COMMIT is not that of an ancestor."
@@ -180,7 +176,12 @@ to %OLDEST-POSSIBLE-COMMIT is not that of an ancestor."
             (substitutes?  (assoc-ref opts 'substitutes?))
             (authenticate? (assoc-ref opts 'authenticate-channels?)))
        (if command-line
-           (let* ((directory
+           (let* ((channel-validation-pairs
+                   (list (cons (channel (inherit %default-guix-channel)
+                                        (commit %oldest-possible-commit))
+                               validate-guix-channel)))
+
+                  (directory
                    (with-store store
                      (with-status-verbosity (assoc-ref opts 'verbosity)
                        (with-build-handler (build-notifier #:use-substitutes?
@@ -191,10 +192,8 @@ to %OLDEST-POSSIBLE-COMMIT is not that of an ancestor."
                          (set-build-options-from-command-line store opts)
                          (cached-channel-instance store channels
                                                   #:authenticate? authenticate?
-                                                  #:reference-channels
-                                                  %reference-channels
-                                                  #:validate-channels
-                                                  validate-guix-channel)))))
+                                                  #:channel-validation-pairs
+                                                  channel-validation-pairs)))))
                   (executable (string-append directory "/bin/guix")))
              (apply execl (cons* executable executable command-line)))
            (warning (G_ "no command specified; nothing to do~%")))))))
