@@ -27,6 +27,9 @@
   #:use-module (guix inferior)
   #:use-module (guix store)
   #:use-module (guix status)
+  #:use-module (guix scripts package)
+  ;; TODO Try just #:use-module ((guix status) #:select (with-status-verbosity))
+  #:use-module (guix read-print) ;; pretty-print-with-comments
   #:use-module ((guix git)
                 #:select (with-git-error-handling))
   #:use-module ((guix utils)
@@ -115,7 +118,17 @@ If COMMAND is not provided, print path to the time-machine profile.\n"))
                  (lambda args
                    (show-version-and-exit "guix time-machine")))
 
-         %standard-build-options))
+         ;; Preserve some of the 'guix package' options.
+         (append (filter (lambda (option)
+                           (any (cut member <> (option-names option))
+                                '(
+                                  "verbosity"
+                                  ;; "profile" "dry-run" "do-not-upgrade"
+                                  )))
+                         %package-options)
+                 %standard-build-options)
+         ))
+
 
 (define %default-options
   ;; Alist of default option values.
@@ -177,18 +190,22 @@ to %OLDEST-POSSIBLE-COMMIT is not that of an ancestor."
 ;;; Entry point.
 ;;;
 
+;; TODO guix-time-machine should accept -v --verbosity parameter. See the %default-options above
 (define-command (guix-time-machine . args)
   (synopsis "run commands from a different revision")
 
   (with-error-handling
     (with-git-error-handling
+     ;; TODO the let-assignments probably shouldn't be in with-git-error-handling
      (let* ((opts         (parse-args args))
             (channels     (channel-list opts))
             (command-line (assoc-ref opts 'exec))
             (ref          (assoc-ref opts 'ref))
             (substitutes?  (assoc-ref opts 'substitutes?))
             (authenticate? (assoc-ref opts 'authenticate-channels?))
-            (verify-certificate? (assoc-ref opts 'verify-certificate?)))
+            (verify-certificate? (assoc-ref opts 'verify-certificate?))
+            (verbosity     (assoc-ref opts 'verbosity))
+            )
        (let* ((directory
                (with-store store
                  (with-status-verbosity (assoc-ref opts 'verbosity)
@@ -207,6 +224,32 @@ to %OLDEST-POSSIBLE-COMMIT is not that of an ancestor."
                                               #:verify-certificate?
                                               verify-certificate?)))))
               (executable (string-append directory "/bin/guix")))
+         (begin
+           (format #t "[guix-time-machine] opts : ~a\n" opts)
+           (format #t "[guix-time-machine] channels :\n")
+           (map (cut format #t "    ~a\n" <>) channels)
+           (format #t "[guix-time-machine] channels :\n")
+           (map (compose
+                 (cut format #t "[guix-time-machine]    ~a\n" <>)
+                 channel-name)
+                channels)
+           (format #t "[guix-time-machine] command-line : ~a\n" command-line)
+           (format #t "[guix-time-machine] ref : ~a\n" ref)
+           (format #t "[guix-time-machine] substitutes? : ~a\n" substitutes?)
+           (format #t "[guix-time-machine] authenticate? : ~a\n" authenticate?)
+           ;; `(
+           ;;   (system . ,(%current-system))
+           ;;   (substitutes? . #t)
+           ;;   (offload? . #t)
+           ;;   (print-build-trace? . #t)
+           ;;   (print-extended-build-trace? . #t)
+           ;;   (multiplexed-build-output? . #t)
+           ;;   (graft? . #t)
+           ;;   (debug . 0)
+           ;;   (verbosity . 1))
+           ;; )
+           (format #t "[guix-time-machine] verbosity : ~a\n" verbosity)
+           )
          (if command-line
              (apply execl (cons* executable executable command-line))
              (format #t "~a\n" directory)))))))

@@ -47,7 +47,7 @@
               (build  (primitive-load script))
               (git?   (git-predicate source)))
          (run-with-store store
-           ;; TODO: Extract #:version and #:commit using Guile-Git.
+           ;; TODO: Extract #:version and #:commit using Guile-Git. See also doc/build.scm
            (mlet* %store-monad ((source (interned-file source "guix-source"
                                                        #:select? git?
                                                        #:recursive? #t))

@@ -949,10 +949,13 @@ X.509 host certificate; otherwise, warn about the problem and keep going."
     (store-lift add-temp-root))
 
   (mkdir-p cache-directory)
+  (format #t "(mkdir-p cache-directory) ... done\n")
   (maybe-remove-expired-cache-entries cache-directory
                                       cache-entries
                                       #:entry-expiration
                                       (file-expiration-time ttl stat:mtime))
+  (format #t "(maybe-remove-expired-cache-entries ...) ... done\n")
+  (format #t "(file-exists? cached) : ~a\n" (file-exists? cached))
 
   ;; Clean the legacy cache directory as well.  Remove this call once at least
   ;; one year has passed.
@@ -980,6 +983,16 @@ X.509 host certificate; otherwise, warn about the problem and keep going."
                                                            #:verify-certificate?
                                                            verify-certificate?))
                              (commits -> (map channel-instance-commit instances)))
+
+          (format #t "[cached-channel-instance] instances :\n")
+          (map (compose (cut format #t "[cached-channel-instance]    ~a\n" <>)
+                        channel-name
+                        channel-instance-channel
+                        ) instances)
+          (format #t "[cached-channel-instance] commits :\n")
+          (map (compose (cut format #t "[cached-channel-instance]    ~a\n" <>)
+                        ) commits)
+
           ;; Return early if cache is hit with filled channel dependencies.
           (if (file-exists? (cached commits))
               (return (cached commits))
@@ -988,17 +1001,22 @@ X.509 host certificate; otherwise, warn about the problem and keep going."
                 (mbegin %store-monad
                   ;; It's up to the caller to install a build handler to report
                   ;; what's going to be built.
-                  (built-derivations (list profile))
+                  (let* [(profile-derivations (built-derivations (list profile)))]
+                    (format #t "[cached-channel-instance] profile-derivations : ~a\n" profile-derivations)
+                    profile-derivations)
 
                   ;; Cache if and only if AUTHENTICATE? is true.
-                  (if authenticate?
-                      (mbegin %store-monad
-                        (symlink* (derivation->output-path profile) (cached commits))
-                        (add-indirect-root* (cached commits))
-                        (return (cached commits)))
-                      (mbegin %store-monad
-                        (add-temp-root* (derivation->output-path profile))
-                        (return (derivation->output-path profile)))))))))))
+                  (let* [(profile-output-path (derivation->output-path profile))]
+                    (format #t "[cached-channel-instance] authenticate? : ~a\n" authenticate?)
+                    (format #t "[cached-channel-instance] profile-output-path : ~a\n" profile-output-path)
+                    (if authenticate?
+                        (mbegin %store-monad
+                          (symlink* profile-output-path (cached commits))
+                          (add-indirect-root* (cached commits))
+                          (return (cached commits)))
+                        (mbegin %store-monad
+                          (add-temp-root* profile-output-path)
+                          (return profile-output-path)))))))))))
 
 (define* (inferior-for-channels channels
                                 #:key

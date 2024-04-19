@@ -1141,6 +1141,8 @@ summary, and level 0 shows nothing."
       ;; display when we have information for all of DOWNLOAD.
       (not (any (compose zero? substitutable-download-size) download)))
 
+    (format #t "[show-what-to-build] %default-verbosity : ~a\n" %default-verbosity)
+    (format #t "[show-what-to-build] verbosity : ~a\n" verbosity)
     ;; Combinatorial explosion ahead along two axes: DRY-RUN? and VERBOSITY.
     ;; Unfortunately, this is hardly avoidable for proper i18n.
     (if dry-run?
@@ -1203,7 +1205,7 @@ summary, and level 0 shows nothing."
                                   "~:[~h items would be downloaded~%~;~]"
                                   (length download)))
                              (null? download) (length download))))))
-
+;;;;;;;;;;;;; above is the then-branch below is the else-branch
         (begin
           (unless (or (zero? verbosity) (null? build))
             (format (current-error-port)

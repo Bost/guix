@@ -551,6 +551,15 @@ depending on the policy it implements."
   (let loop ((channels channels)
              (previous-channels '())
              (instances '()))
+    (format #t "[loop] channels :\n")
+    (map (compose (cut format #t "[loop]    ~a\n" <>) channel-name) channels)
+    (format #t "[loop] previous-channels :\n")
+    (map (compose (cut format #t "[loop]    ~a\n" <>) channel-name) previous-channels)
+    (format #t "[loop] instances :\n")
+    (map (compose (cut format #t "[loop]    ~a\n" <>)
+                  channel-name
+                  channel-instance-channel
+                  ) instances)
     (match channels
       (()
        (reverse instances))
