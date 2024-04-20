@@ -113,6 +113,9 @@ If COMMAND is not provided, print path to the time-machine profile.\n"))
          (option '(#\v "verbosity") #t #f
                  (lambda (opt name arg result)
                    (alist-cons 'verbosity (string->number* arg) result)))
+         (option '(#\n "dry-run") #f #f
+                 (lambda (opt name arg result)
+                   (alist-cons 'dry-run? #t result)))
 
          %standard-build-options))
 
@@ -186,7 +189,8 @@ to %OLDEST-POSSIBLE-COMMIT is not that of an ancestor."
             (ref          (assoc-ref opts 'ref))
             (substitutes?  (assoc-ref opts 'substitutes?))
             (authenticate? (assoc-ref opts 'authenticate-channels?))
-            (verbosity     (assoc-ref opts 'verbosity)))
+            (verbosity     (assoc-ref opts 'verbosity))
+            (dry-run?      (assoc-ref opts 'dry-run?)))
        (let* ((directory
                (with-store store
                  (with-status-verbosity verbosity
@@ -194,7 +198,8 @@ to %OLDEST-POSSIBLE-COMMIT is not that of an ancestor."
                                                        substitutes?
                                                        #:verbosity
                                                        verbosity
-                                                       #:dry-run? #f)
+                                                       #:dry-run?
+                                                       dry-run?)
                      (set-build-options-from-command-line store opts)
                      (cached-channel-instance store channels
                                               #:authenticate? authenticate?
