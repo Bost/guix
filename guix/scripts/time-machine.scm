@@ -70,6 +70,8 @@ If COMMAND is not provided, print path to the time-machine profile.\n"))
   (display (G_ "
       --disable-authentication
                          disable channel authentication"))
+  (display (G_ "
+  -v, --verbosity=LEVEL  use the given verbosity LEVEL"))
   (newline)
   (show-build-options-help)
   (newline)
@@ -108,6 +110,9 @@ If COMMAND is not provided, print path to the time-machine profile.\n"))
          (option '(#\V "version") #f #f
                  (lambda args
                    (show-version-and-exit "guix time-machine")))
+         (option '(#\v "verbosity") #t #f
+                 (lambda (opt name arg result)
+                   (alist-cons 'verbosity (string->number* arg) result)))
 
          %standard-build-options))
 
@@ -180,14 +185,15 @@ to %OLDEST-POSSIBLE-COMMIT is not that of an ancestor."
             (command-line (assoc-ref opts 'exec))
             (ref          (assoc-ref opts 'ref))
             (substitutes?  (assoc-ref opts 'substitutes?))
-            (authenticate? (assoc-ref opts 'authenticate-channels?)))
+            (authenticate? (assoc-ref opts 'authenticate-channels?))
+            (verbosity     (assoc-ref opts 'verbosity)))
        (let* ((directory
                (with-store store
-                 (with-status-verbosity (assoc-ref opts 'verbosity)
+                 (with-status-verbosity verbosity
                    (with-build-handler (build-notifier #:use-substitutes?
                                                        substitutes?
                                                        #:verbosity
-                                                       (assoc-ref opts 'verbosity)
+                                                       verbosity
                                                        #:dry-run? #f)
                      (set-build-options-from-command-line store opts)
                      (cached-channel-instance store channels
