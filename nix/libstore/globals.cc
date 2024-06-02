@@ -56,6 +56,11 @@ Settings::Settings()
     envKeepDerivations = false;
     lockCPU = getEnv("NIX_AFFINITY_HACK", "1") == "1";
     showTrace = false;
+
+// verbosity levels are defined in nix/libutil/types.hh
+    buildVerbosity = lvlVomit;
+    showTrace = true;
+    printBuildTrace = true;
 }
 
 

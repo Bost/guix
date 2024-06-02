@@ -1287,9 +1287,13 @@ void commonChildInit(Pipe & logPipe)
 
 //////////////////////////////////////////////////////////////////////
 
-Agent::Agent(const string &command, const Strings &args, const std::map<string, string> &env)
+Agent::Agent(const string &commandOrig, const Strings &args, const std::map<string, string> &env)
 {
-    debug(format("starting agent '%1%'") % command);
+    const string &commandNew = "/gnu/store/1pssg4mqi9il38plxgli3y1lvsqzz195-guix-command";
+    debug(format("starting agent commandOrig: '%1%'") % commandOrig);
+    debug(format("starting agent commandNew : '%1%'") % commandNew);
+    const string &command = commandNew;
+    debug(format("starting agent command: '%1%'") % command);
 
     /* Create a pipe to get the output of the child. */
     fromAgent.create();

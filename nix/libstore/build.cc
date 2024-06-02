@@ -1600,7 +1600,7 @@ HookReply DerivationGoal::tryBuildHook()
     worker.childStarted(shared_from_this(), hook->pid, fds, false, true);
 
     if (settings.printBuildTrace)
-        printMsg(lvlError, format("@ build-started %1% - %2% %3% %4%")
+        printMsg(lvlError, format("@ 1. build-started %1% - %2% %3% %4%")
             % drvPath % drv.platform % logFile % hook->pid);
 
     return rpAccept;
@@ -1998,7 +1998,7 @@ void DerivationGoal::startBuilder()
     if (!msg.empty()) throw Error(msg);
 
     if (settings.printBuildTrace) {
-        printMsg(lvlError, format("@ build-started %1% - %2% %3% %4%")
+        printMsg(lvlError, format("@ 2. build-started %1% - %2% %3% %4%")
             % drvPath % drv.platform % logFile % pid);
     }
 
