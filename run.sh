@@ -58,22 +58,11 @@ done
 # --share=/usr/bin \
 # --share=$wd/etc=/usr/etc \
 
-
-# touch /tmp/guix-devel-socket.socket
 export GUIX_DAEMON_SOCKET=/tmp/guix-devel-socket.socket
-# '--preserve=^GUIX_DAEMON_SOCKET$' \
-#     --emulate-fhs \
-
-
-# export SSL_CERT_DIR=$(guix build nss-certs)
-export SSL_CERT_DIR="/run/current-system/profile"
-export SSL_CERT_FILE="$SSL_CERT_DIR/etc/ssl/certs/ca-certificates.crt"
-export GIT_SSL_CAINFO="$SSL_CERT_FILE"
 
 set -x
 guix shell \
      --container --network \
-     --share=$wd/root-dir/var/guix/db=/var/guix/db \
      --share=$HOME/.bash_history=$HOME/.bash_history \
      --share=$wd/.bash_profile=$HOME/.bash_profile \
      --share=$wd/.bashrc=$HOME/.bashrc \
@@ -81,11 +70,8 @@ guix shell \
      --share=/gnu/store \
      --share=/tmp \
      --share=/var \
+     '--preserve=^GUIX_DAEMON_SOCKET$' \
      --development guix \
      gzip libzip gnupg sudo which direnv help2man git strace glibc-locales bash \
-     '--preserve=^SSL_CERT_DIR$' \
-     '--preserve=^SSL_CERT_FILE$' \
-     '--preserve=^GIT_SSL_CAINFO$' \
-     nss-certs \
      --pure \
      -- bash

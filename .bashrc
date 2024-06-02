@@ -18,8 +18,6 @@ export SHELL
 #     [ ! -L $bname ] && ln -s $filepath $bname
 # done
 
-export GUIX_DAEMON_SOCKET=/tmp/guix-devel-socket.socket
-
 run-guix-daemon () {
     set -x  # Print commands and their arguments as they are executed.
     ./pre-inst-env \
@@ -99,6 +97,12 @@ then
 fi
 
 guix_prompt
+
+if [ -z ${GUIX_DAEMON_SOCKET+x} ]; then
+    printf "\nGUIX_DAEMON_SOCKET is not set\n"
+else
+    printf "\nGUIX_DAEMON_SOCKET: %s\n" $GUIX_DAEMON_SOCKET
+fi
 
 # Adjust the prompt depending on whether we're in 'guix environment'.
 if [ -n "$GUIX_ENVIRONMENT" ]
