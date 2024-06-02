@@ -3,7 +3,7 @@
 set -ex
 
 # mkdir a
-# echo '(define-module (my-channel-a))' > a/my-channel-a.scm
+# echo '(define-module (my-channel-a) (define a 42))' > a/my-channel-a.scm
 # (cd a; git init; git add .; git commit -m init)
 
 # mkdir b
@@ -50,4 +50,4 @@ set -ex
 
 # /var/log/guix/drvs/xm/hfg4b67gx4mw67gmfm9b597hgp359p-my-channel-c.drv.gz
 
-exec guix time-machine --channels=channels.scm -- describe
+# exec guix time-machine --channels=channels.scm -- describe

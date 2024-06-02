@@ -1105,20 +1105,30 @@ recursively."
                             #:optional (mode (build-mode normal)))
   "Build DERIVATIONS, a list of <derivation> or <derivation-input> objects,
 .drv file names, or derivation/output pairs, using the specified MODE."
+  (format #t "[build-derivations] store : ~a\n" store)
+  (format #t "[build-derivations] mode : ~a\n" mode)
   (build-things store (map (match-lambda
-                            ((? derivation? drv)
-                             (derivation-file-name drv))
-                            ((? derivation-input? input)
+                            [(? derivation? drv)
+                             (format #t "[build-derivations] 0 (? derivation? drv)\n")
+                             (format #t "[build-derivations] 0 drv : ~a\n" drv)
+                             ;; (format #t "[build-derivations] 0 (derivation? drv) : ~a\n" (derivation? drv))
+                             (derivation-file-name drv)]
+                            [(? derivation-input? input)
+                             (format #t "[build-derivations] 1 (? derivation-input? input)\n")
                              (cons (derivation-input-path input)
                                    (string-join
                                     (derivation-input-sub-derivations input)
-                                    ",")))
-                            ((? string? file) file)
-                            (((? derivation? drv) . output)
+                                    ","))]
+                            [(? string? file)
+                             (format #t "[build-derivations] 2 (? string? file)\n")
+                             file]
+                            [((? derivation? drv) . output)
+                             (format #t "[build-derivations] 3 ((? derivation? drv) . output)\n")
                              (cons (derivation-file-name drv)
-                                   output))
-                            (((? string? file) . output)
-                             (cons file output)))
+                                   output)]
+                            [((? string? file) . output)
+                             (format #t "[build-derivations] 4 ((? string? file) . output)\n")
+                             (cons file output)])
                            derivations)
                 mode))
 

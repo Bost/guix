@@ -1650,6 +1650,7 @@ by an arrow followed by a file-like object.  For example:
 
 In this example, the first two modules are taken from MODULE-PATH, and the
 last one is created from the given <scheme-file> object."
+  (format #t "[gexp imported-modules] modules: ~a\n" modules)
   (let ((files (map (match-lambda
                       (((module ...) '=> file)
                        (cons (module->source-file-name module)
@@ -1675,6 +1676,7 @@ last one is created from the given <scheme-file> object."
 corresponding to MODULES.  All the MODULES are built in a context where
 they can refer to each other.  When TARGET is true, cross-compile MODULES for
 TARGET, a GNU triplet."
+  (format #t "[gexp compiled-modules] modules: ~a\n" modules)
   (define total (length modules))
 
   (mlet %store-monad ((modules (imported-modules modules

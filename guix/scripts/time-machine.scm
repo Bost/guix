@@ -27,6 +27,8 @@
   #:use-module (guix inferior)
   #:use-module (guix store)
   #:use-module (guix status)
+  #:use-module (guix scripts package)
+  #:use-module (guix read-print) ;; pretty-print-with-comments
   #:use-module ((guix git)
                 #:select (update-cached-checkout with-git-error-handling))
   #:use-module ((guix utils)
@@ -130,7 +132,7 @@ If COMMAND is not provided, print path to the time-machine profile.\n"))
     (authenticate-channels? . #t)
     (graft? . #t)
     (debug . 0)
-    (verbosity . 1)))
+    (verbosity . 3)))
 
 (define (parse-args args)
   "Parse the list of command line arguments ARGS."
@@ -183,14 +185,31 @@ to %OLDEST-POSSIBLE-COMMIT is not that of an ancestor."
 
   (with-error-handling
     (with-git-error-handling
+     ;; TODO the let-assignments probably shouldn't be in with-git-error-handling
      (let* ((opts         (parse-args args))
             (channels     (channel-list opts))
             (command-line (assoc-ref opts 'exec))
             (ref          (assoc-ref opts 'ref))
             (substitutes?  (assoc-ref opts 'substitutes?))
             (authenticate? (assoc-ref opts 'authenticate-channels?))
+            (print-extended-build-trace? (assoc-ref opts 'print-extended-build-trace?))
+            (print-build-trace?          (assoc-ref opts 'print-build-trace?))
             (verbosity     (assoc-ref opts 'verbosity))
             (dry-run?      (assoc-ref opts 'dry-run?)))
+       (begin
+         ;; (format #t "[guix-time-machine] opts : ~a\n" opts)
+         ;; (format #t "[guix-time-machine] channels :\n") (map (cut format #t "    ~a\n" <>) channels)
+         ;; (format #t "[guix-time-machine] channels :\n")
+         ;; (map (compose (cut format #t "[guix-time-machine]    ~a\n" <>) channel-name) channels)
+         ;; (format #t "[guix-time-machine] command-line : ~a\n" command-line)
+         ;; (format #t "[guix-time-machine] ref : ~a\n" ref)
+         ;; (format #t "[guix-time-machine] substitutes? : ~a\n" substitutes?)
+         ;; (format #t "[guix-time-machine] authenticate? : ~a\n" authenticate?)
+         (format #t "[guix-time-machine] verbosity : ~a\n" verbosity)
+         (format #t "[guix-time-machine] dry-run?  : ~a\n" dry-run?)
+         (format #t "[guix-time-machine] print-build-trace? : ~a\n" print-build-trace?)
+         (format #t "[guix-time-machine] print-extended-build-trace? : ~a\n" print-extended-build-trace?)
+         )
        (let* ((directory
                (with-store store
                  (with-status-verbosity verbosity
@@ -200,14 +219,19 @@ to %OLDEST-POSSIBLE-COMMIT is not that of an ancestor."
                                                        verbosity
                                                        #:dry-run?
                                                        dry-run?)
+                     (format #t "[guix-time-machine] store : ~a\n" store)
                      (set-build-options-from-command-line store opts)
+                     (format #t "[guix-time-machine] set-build-options-from-command-line ... done\n")
                      (cached-channel-instance store channels
                                               #:authenticate? authenticate?
                                               #:reference-channels
                                               %reference-channels
                                               #:validate-channels
-                                              validate-guix-channel)))))
-              (executable (string-append directory "/bin/guix")))
+                                              validate-guix-channel))))))
          (if command-line
-             (apply execl (cons* executable executable command-line))
+             (begin
+               (format #t "[guix-time-machine] directory : ~a\n" directory)
+               (let* ((executable (string-append directory "/bin/guix")))
+                 (format #t "(cons* ...) : ~a\n" (cons* executable executable command-line))
+                 (apply execl (cons* executable executable command-line))))
              (format #t "~a\n" directory)))))))

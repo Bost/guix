@@ -810,14 +810,14 @@ encoding conversion errors."
 
 (define* (set-build-options server
                             #:key keep-failed? keep-going? fallback?
-                            (verbosity 0)
+                            (verbosity 5)
                             rounds                ;number of build rounds
                             max-build-jobs
                             timeout
                             max-silent-time
                             (offload? #t)
                             (use-build-hook? *unspecified*) ;deprecated
-                            (build-verbosity 0)
+                            (build-verbosity 5)
                             (log-type 0)
                             (print-build-trace #t)
                             (user-name (current-user-name))
@@ -887,6 +887,10 @@ encoding conversion errors."
       (send (boolean use-substitutes?)))
     (when (>= (store-connection-minor-version server) 12)
       (let ((pairs `(;; This option is honored by 'guix substitute' et al.
+                     ;; ,@(if print-build-trace
+                     ;;       `(("print-build-trace"
+                     ;;          . ,(if print-build-trace "1" "0")))
+                     ;;       '())
                      ,@(if print-build-trace
                            `(("print-extended-build-trace"
                               . ,(if print-extended-build-trace? "1" "0")))
@@ -927,7 +931,11 @@ encoding conversion errors."
                      ,@(if locale
                            `(("locale" . ,locale))
                            '()))))
+        (format #t "[set-build-options] pairs : ~a\n" pairs)
+        ;; (format #t "[set-build-options] ((@(guix serialization) read-string-pairs) pairs) : ~a\n"
+        ;;         ((@(guix serialization) read-string-pairs) pairs))
         (send (string-pairs pairs))))
+    (format #t "[set-build-options] server : ~a\n" server)
     (write-buffered-output server)
     (let loop ((done? (process-stderr server)))
       (or done? (process-stderr server)))))
@@ -1446,13 +1454,10 @@ CUTOFF is the threshold above which we stop accumulating unresolved nodes."
          (map/accumulate-builds store proc rest #:cutoff cutoff)))))
 
 (define build-things
-  (let ((build (operation (build-things (string-list things)
-                                        (integer mode))
-                          "Do it!"
-                          boolean))
-        (build/old (operation (build-things (string-list things))
-                              "Do it!"
-                              boolean)))
+  (let* ((build (operation (build-things (string-list things)
+                                         (integer mode)) "Do it!" boolean))
+         (build/old (operation (build-things (string-list things)) "Do it!" boolean)))
+    (format #t "[build-things] build : ~a\n" build)
     (lambda* (store things #:optional (mode (build-mode normal)))
       "Build THINGS, a list of store items which may be either '.drv' files or
 outputs, and return when the worker is done building them.  Elements of THINGS
@@ -1477,12 +1482,33 @@ When a handler is installed with 'with-build-handler', it is called any time
                 ;; 2018/10/15).
                 (warn-about-old-daemon))
               (if (>= (store-connection-minor-version store) 15)
-                  (build store things mode)
+                  (begin
+                    (format #t "[build-things] store : ~a\n" store)
+                    (format #t "[build-things] things : ~a\n" things)
+                    (format #t "[build-things] mode : ~a\n" mode)
+                    (build store things mode))
                   (if (= mode (build-mode normal))
                       (build/old store things)
                       (raise (condition (&store-protocol-error
                                          (message "unsupported build mode")
                                          (status  1))))))))))))
+(define-public (gn)
+  #|
+  (use-modules (guix store))
+  |#
+  (define %store (open-connection
+                  "file:///tmp/guix-devel-socket.socket"
+                  ))
+  (set-build-options %store #:print-extended-build-trace? #t #:print-build-trace #t #:use-substitutes? #t)
+  (build-things %store (list "/gnu/store/xmhfg4b67gx4mw67gmfm9b597hgp359p-my-channel-c.drv") 0))
+
+(define-public (go)
+  #|
+  (use-modules (guix store))
+  |#
+  (define %store (open-connection))
+  (set-build-options %store #:print-extended-build-trace? #t #:print-build-trace #t #:use-substitutes? #t)
+  (build-things %store (list "/gnu/store/xmhfg4b67gx4mw67gmfm9b597hgp359p-my-channel-c.drv") 0))
 
 (define-operation (ensure-path (store-path path))
   "Ensure that a path is valid.  If it is not valid, it may be made valid by

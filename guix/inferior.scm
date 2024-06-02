@@ -893,11 +893,11 @@ reclaimed after TTL seconds.  This procedure opens a new connection to the
 build daemon.  AUTHENTICATE? determines whether CHANNELS are authenticated.
 
 VALIDATE-CHANNELS must be a four-argument procedure used to validate channel
-instances against REFERENCE-CHANNELS; it is passed as #:validate-pull to
+channel-instances against REFERENCE-CHANNELS; it is passed as #:validate-pull to
 'latest-channel-instances' and should raise an exception in case a target
 channel commit is deemed \"invalid\"."
   (define commits
-    ;; Since computing the instances of CHANNELS is I/O-intensive, use a
+    ;; Since computing the channel-instances of CHANNELS is I/O-intensive, use a
     ;; cheaper way to get the commit list of CHANNELS.  This limits overhead
     ;; to the minimum in case of a cache hit.
     (map channel-full-commit channels))
@@ -936,15 +936,18 @@ channel commit is deemed \"invalid\"."
     (store-lift add-temp-root))
 
   (mkdir-p cache-directory)
+  (format #t "(mkdir-p cache-directory) ... done\n")
   (maybe-remove-expired-cache-entries cache-directory
                                       cache-entries
                                       #:entry-expiration
                                       (file-expiration-time ttl))
+  (format #t "(maybe-remove-expired-cache-entries ...) ... done\n")
+  (format #t "(file-exists? cached) : ~a\n" (file-exists? cached))
 
   (if (file-exists? cached)
       cached
       (run-with-store store
-        (mlet* %store-monad ((instances
+        (mlet* %store-monad ((channel-instances
                               -> (latest-channel-instances store channels
                                                            #:authenticate?
                                                            authenticate?
@@ -952,22 +955,34 @@ channel commit is deemed \"invalid\"."
                                                            reference-channels
                                                            #:validate-pull
                                                            validate-channels))
-                             (profile
-                              (channel-instances->derivation instances)))
+                             (channel-derivation
+                              (channel-instances->derivation channel-instances)))
+          (format #t "[cached-channel-instance] channel-instances :\n")
+          (map (compose (cut format #t "[cached-channel-instance]    ~a\n" <>)
+                        channel-name
+                        channel-instance-channel
+                        ) channel-instances)
+          (format #t "[cached-channel-instance] channel-derivation : ~a\n" channel-derivation)
+          (format #t "[cached-channel-instance] (mbegin %store-monad ...) ...\n")
           (mbegin %store-monad
             ;; It's up to the caller to install a build handler to report
             ;; what's going to be built.
-            (built-derivations (list profile))
+            (let* [(profile-derivations (built-derivations (list channel-derivation)))]
+              (format #t "[cached-channel-instance] profile-derivations : ~a\n" profile-derivations)
+              profile-derivations)
 
             ;; Cache if and only if AUTHENTICATE? is true.
-            (if authenticate?
-                (mbegin %store-monad
-                  (symlink* (derivation->output-path profile) cached)
-                  (add-indirect-root* cached)
-                  (return cached))
-                (mbegin %store-monad
-                  (add-temp-root* (derivation->output-path profile))
-                  (return (derivation->output-path profile)))))))))
+            (let* [(profile-output-path (derivation->output-path channel-derivation))]
+              (format #t "[cached-channel-instance] authenticate? : ~a\n" authenticate?)
+              (format #t "[cached-channel-instance] profile-output-path : ~a\n" profile-output-path)
+              (if authenticate?
+                  (mbegin %store-monad
+                    (symlink* profile-output-path cached)
+                    (add-indirect-root* cached)
+                    (return cached))
+                  (mbegin %store-monad
+                    (add-temp-root* profile-output-path)
+                    (return profile-output-path)))))))))
 
 (define* (inferior-for-channels channels
                                 #:key

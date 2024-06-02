@@ -214,6 +214,8 @@ options handled by 'set-build-options-from-command-line', and listed in
                (and peer (not (= AF_UNIX (sockaddr:fam peer))))))
     (warning (G_ "'--keep-failed' ignored since you are \
 talking to a remote daemon\n")))
+  (format #t "[set-build-options-from-command-line] print-build-trace? : ~a\n" (assoc-ref opts 'print-build-trace?))
+  (format #t "[set-build-options-from-command-line] print-extended-build-trace? : ~a\n" (assoc-ref opts 'print-extended-build-trace?))
 
   (set-build-options store
                      #:keep-failed? (assoc-ref opts 'keep-failed?)

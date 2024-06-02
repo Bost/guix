@@ -184,7 +184,9 @@ to the corresponding bytevector."
 
 (define %default-channel-url
   ;; URL of the default 'guix' channel.
-  "https://git.savannah.gnu.org/git/guix.git")
+  "https://git.savannah.gnu.org/git/guix.git"
+  ;; "file:///home/bost/.cache/guix/checkouts/pjmkglp4t7znuugeurpurzikxq3tnlaywmisyr27shj7apsnalwq"
+  )
 
 (define %default-guix-channel
   (channel
@@ -536,9 +538,21 @@ depending on the policy it implements."
     (and (channel-commit a)
          (not (channel-commit b))))
 
+  (format #t "[lci] store : ~a\n" store)
+  (format #t "[lci] current-channels : ~a\n" current-channels)
+  (format #t "[lci] authenticate? : ~a\n" authenticate?)
   (let loop ((channels channels)
              (previous-channels '())
              (instances '()))
+    (format #t "[lci loop] channels :\n")
+    (map (compose (cut format #t "[lci loop]    ~a\n" <>) channel-name) channels)
+    (format #t "[lci loop] previous-channels :\n")
+    (map (compose (cut format #t "[lci loop]    ~a\n" <>) channel-name) previous-channels)
+    (format #t "[lci loop] instances :\n")
+    (map (compose (cut format #t "[lci loop]    ~a\n" <>)
+                  channel-name
+                  channel-instance-channel
+                  ) instances)
     (match channels
       (()
        (reverse instances))

@@ -34,6 +34,7 @@
              (guix profiles)
              (guix utils)
              (git)
+             (git describe)
              (gnu packages base)
              (gnu packages compression)
              (gnu packages gawk)
@@ -1278,6 +1279,9 @@ commit date (an integer)."
          (oid        (reference-target head))
          (commit     (commit-lookup repository oid)))
     ;; TODO: Use (git describe) when it's widely available.
+    ;; (git describe) is in the
+    ;; /gnu/store/fd0wp9wycxcm1za3jyb3yy5ckmrmcxhl-guile-git-0.6.0/share/guile/site/3.0/git.scm
+    ;; rg --follow '\(git describe\)' $GUILE_LOAD_PATH
     (values (oid->string oid) (commit-time commit))))
 
 
