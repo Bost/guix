@@ -1,0 +1,616 @@
+See how the order influences the compilation result:
+
+```bash
+guile --no-auto-compile -L . -c '(use-modules (system base compile)) (for-each compile-file (list "one.scm" "two.scm" "three.scm"))'
+
+guile --no-auto-compile -L . -c '(use-modules (system base compile)) (for-each compile-file (list "three.scm" "two.scm" "one.scm"))'
+
+guile --no-auto-compile -L . -c '(use-modules (system base compile)) (for-each compile-file (list "one.scm" "three.scm" "two.scm"))'
+Backtrace:
+In system/base/compile.scm:
+ 153: 19 [#<procedure 1985040 at system/base/compile.scm:151:8 (port)> #<closed: file 0>]
+ 216: 18 [read-and-compile #<input: three.scm 5> #:from ...]
+ 232: 17 [lp () #f #<module (#{ g180}#) 189aa20>]
+ 180: 16 [lp (#<procedure compile-tree-il (x e opts)>) (define-module # # ...) ...]
+In ice-9/boot-9.scm:
+2325: 15 [save-module-excursion #<procedure 19a84e0 at language/scheme/compile-tree-il.scm:29:3 ()>]
+In language/scheme/compile-tree-il.scm:
+  31: 14 [#<procedure 19a84e0 at language/scheme/compile-tree-il.scm:29:3 ()>]
+In ice-9/psyntax.scm:
+1091: 13 [expand-top-sequence ((define-module (three) #:use-module ...)) () ...]
+ 976: 12 [scan ((define-module (three) #:use-module ...)) () ...]
+ 270: 11 [scan ((#(syntax-object let # ...) (#) (# #) ...)) () ...]
+In ice-9/eval.scm:
+ 411: 10 [eval # ()]
+In ice-9/boot-9.scm:
+2875: 9 [define-module* (three) #:filename ...]
+2850: 8 [resolve-imports (((two)))]
+2788: 7 [resolve-interface (two) #:select ...]
+2713: 6 [#<procedure 15381e0 at ice-9/boot-9.scm:2701:4 (name #:optional autoload version #:key ensure)> # ...]
+2986: 5 [try-module-autoload (two) #f]
+2325: 4 [save-module-excursion #<procedure 17a3360 at ice-9/boot-9.scm:2987:17 ()>]
+3006: 3 [#<procedure 17a3360 at ice-9/boot-9.scm:2987:17 ()>]
+In unknown file:
+   ?: 2 [primitive-load-path "two" ...]
+In two.scm:
+   1: 1 [#<procedure 1714940 ()>]
+In ice-9/boot-9.scm:
+ 106: 0 [#<procedure 19b0f80 at ice-9/boot-9.scm:97:6 (thrown-k . args)> misc-error ...]
+
+ice-9/boot-9.scm:106:20: In procedure #<procedure 19b0f80 at ice-9/boot-9.scm:97:6 (thrown-k . args)>:
+ice-9/boot-9.scm:106:20: In procedure #<procedure 1714940 ()>: Unbound variable: run-time
+```
+
+So, what happened?
+
+In the last case (one, three, two), the compiler:
+
+  1. compiles ‘one.scm’, which creates module (one) in the global name
+     space with just ‘expansion-time’ in its exported bindings;
+
+  2. when compiling ‘three.scm’, it loads ‘two.scm’; since (two) uses
+     (one), it does ‘(resolve-module '(one))’, and since (one) already
+     exists it is used;
+
+     however, the (one) we have comes from step 1, and lacks the
+     ‘run-time’ binding, hence the unbound variable failure.
+
+I think the right thing would be to use a separate module hierarchy in
+the dynamic extent of ‘compile-file’, somehow, such that all module side
+effects are isolated.
+
+Of course the above can be worked around by running ‘compile-file’ in a
+child process, but forking alone is more expensive than ‘compile-file’,
+so that’s not really a solution when there are many files.
+
+Thanks,
+Ludo’.
+
+
+
+Message #8 received at 15602 <at> debbugs.gnu.org (full text, mbox):
+
+From: ludo <at> gnu.org (Ludovic Courtès)
+To: 15602 <at> debbugs.gnu.org
+Subject: Re: bug#15602: Compiling several files in the same session [2.0.9]
+Date: Sun, 13 Oct 2013 22:56:06 +0200
+
+[Message part 1 (text/plain, inline)]
+
+ludo <at> gnu.org (Ludovic Courtès) skribis:
+
+> In the last case (one, three, two), the compiler:
+>
+>   1. compiles ‘one.scm’, which creates module (one) in the global name
+>      space with just ‘expansion-time’ in its exported bindings;
+>
+>   2. when compiling ‘three.scm’, it loads ‘two.scm’; since (two) uses
+>      (one), it does ‘(resolve-module '(one))’, and since (one) already
+>      exists it is used;
+>
+>      however, the (one) we have comes from step 1, and lacks the
+>      ‘run-time’ binding, hence the unbound variable failure.
+>
+> I think the right thing would be to use a separate module hierarchy in
+> the dynamic extent of ‘compile-file’, somehow, such that all module side
+> effects are isolated.
+
+In Guix (the ‘guix pull’ command, which compiles all of Guix), I ended
+up with this:
+
+[Message part 2 (text/x-scheme, inline)]
+
+ (define* (compile-file* file #:key output-file (opts '()))
+   ;; Like 'compile-file', but remove any (guix …) and (gnu …) modules
+   ;; created during the process as an ugly workaround for
+   ;; <http://bugs.gnu.org/15602> (FIXME).  This ensures correctness,
+   ;; but is overly conservative and very slow.
+
+   (define (module-directory+file module)
+     ;; Return the directory for MODULE, like the 'dir-hint' in
+     ;; boot-9.scm.
+     (match (module-name module)
+       ((beginning ... last)
+        (values (string-concatenate
+                 (map (lambda (elt)
+                        (string-append (symbol->string elt)
+                                       file-name-separator-string))
+                      beginning))
+                (symbol->string last)))))
+
+   (define (clear-module-tree! root)
+     ;; Delete all the modules under ROOT.
+     (hash-for-each (lambda (name module)
+                      (module-remove! root name)
+                      (let-values (((dir name)
+                                    (module-directory+file module)))
+                        (set-autoloaded! dir name #f))
+                      (clear-module-tree! module))
+                    (module-submodules root))
+     (hash-clear! (module-submodules root)))
+
+   (compile-file file #:output-file output-file #:opts opts)
+
+   (for-each (compose clear-module-tree! resolve-module)
+             '((guix) (gnu))))
+
+[Message part 3 (text/plain, inline)]
+
+> Of course the above can be worked around by running ‘compile-file’ in a
+> child process, but forking alone is more expensive than ‘compile-file’,
+> so that’s not really a solution when there are many files.
+
+As it turns out, the hack above is just as slow as forking: what takes
+time is not forking, but reloading the same modules over and over again.
+
+So we should have a way to keep modules that have been fully evaluated,
+and to discard modules that have not.
+
+Ideas welcome.
+
+Ludo’.
+
+Message #11 received at 15602 <at> debbugs.gnu.org (full text, mbox):
+
+From: taylanbayirli <at> gmail.com (Taylan Ulrich Bayırlı/Kammer)
+To: 15602 <at> debbugs.gnu.org
+Subject: Possible work-around
+Date: Fri, 06 Nov 2015 09:26:31 +0100
+
+A possible work-around seems to be to use 'load' or 'load-compiled' on a
+module file after compiling it.
+
+As far as I understand, the problem is that Guile somehow ends up with a
+"degenerate" version of the module in the run-time after it's compiled
+but not fully loaded, so we alleviate that by explicitly loading it.  I
+know near to nothing about the deeper mechanisms at play here though, so
+I might be off.  In any case, changing
+
+  guile --no-auto-compile -L . -c \
+    '(use-modules (system base compile))
+     (for-each compile-file (list "one.scm" "three.scm" "two.scm"))'
+
+to
+
+  guile --no-auto-compile -L . -c \
+    '(use-modules (system base compile))
+     (for-each (lambda (file)
+                 (compile-file file)
+                 (load file))
+               (list "one.scm" "three.scm" "two.scm"))'
+
+alleviates the unbound variable error in this case.
+
+Related thread:
+https://lists.gnu.org/archive/html/guix-devel/2015-11/msg00143.html
+
+Taylan
+
+
+
+Message #16 received at 15602-done <at> debbugs.gnu.org (full text, mbox):
+
+From: Andy Wingo <wingo <at> pobox.com>
+To: ludo <at> gnu.org (Ludovic Courtès)
+Cc: 15602-done <at> debbugs.gnu.org
+Subject: Re: bug#15602: Compiling several files in the same session [2.0.9]
+Date: Tue, 21 Jun 2016 13:22:04 +0200
+
+Hi,
+
+On Sun 13 Oct 2013 15:51, ludo <at> gnu.org (Ludovic Courtès) writes:
+
+> $ guile --no-auto-compile -L . -c '(use-modules (system base compile)) (for-each compile-file (list "one.scm" "two.scm" "three.scm"))'
+>
+> $ guile --no-auto-compile -L . -c '(use-modules (system base compile)) (for-each compile-file (list "three.scm" "two.scm" "one.scm"))'
+>
+> $ guile --no-auto-compile -L . -c '(use-modules (system base compile)) (for-each compile-file (list "one.scm" "three.scm" "two.scm"))'
+> Backtrace:
+
+I understand this is now fixed in Guix.  You can of course do this
+for-each compile-file thing, but if modules use each other you need to
+topologically sort in order to make the run-time bindings visible.  Or,
+as Taylan notes, just load after compiling.
+
+> I think the right thing would be to use a separate module hierarchy in
+> the dynamic extent of ‘compile-file’, somehow, such that all module side
+> effects are isolated.
+
+I don't think this is going to happen, for what that's worth :/
+
+> Of course the above can be worked around by running ‘compile-file’ in a
+> child process, but forking alone is more expensive than ‘compile-file’,
+> so that’s not really a solution when there are many files.
+
+It's the N^2 expansion that's the problem, not the forking.  If you have
+N files which depend on each other, then compiling each one will require
+the expansion of approximately all N files, so N*N costs in number of
+files.  Or N log N if you have a tree ordering of your files.  Anyway
+it's badness.
+
+Glad to know that Taylan has fixed this one in Guix.  However I'm not
+sure that there's more to do on Guile's side though.  Closing; please
+re-open or file a new bug if you think there is something Guile should
+do.
+
+Andy
+
+
+
+Message #19 received at 15602-done <at> debbugs.gnu.org (full text, mbox):
+
+From: ludo <at> gnu.org (Ludovic Courtès)
+To: Andy Wingo <wingo <at> pobox.com>
+Cc: 15602-done <at> debbugs.gnu.org
+Subject: Re: bug#15602: Compiling several files in the same session [2.0.9]
+Date: Tue, 21 Jun 2016 14:01:17 +0200
+
+Hi again!
+
+Andy Wingo <wingo <at> pobox.com> skribis:
+
+> On Sun 13 Oct 2013 15:51, ludo <at> gnu.org (Ludovic Courtès) writes:
+>
+>> $ guile --no-auto-compile -L . -c '(use-modules (system base compile)) (for-each compile-file (list "one.scm" "two.scm" "three.scm"))'
+>>
+>> $ guile --no-auto-compile -L . -c '(use-modules (system base compile)) (for-each compile-file (list "three.scm" "two.scm" "one.scm"))'
+>>
+>> $ guile --no-auto-compile -L . -c '(use-modules (system base compile)) (for-each compile-file (list "one.scm" "three.scm" "two.scm"))'
+>> Backtrace:
+>
+> I understand this is now fixed in Guix.
+
+I think it’s worked around, not fixed.  :-)
+
+>> I think the right thing would be to use a separate module hierarchy in
+>> the dynamic extent of ‘compile-file’, somehow, such that all module side
+>> effects are isolated.
+>
+> I don't think this is going to happen, for what that's worth :/
+
+What do you mean?
+
+Global state held in global variables is Bad.  To me, this is clearly an
+area where things can and should be improved.  In a live-hacked,
+long-running system, that ‘compile-file’ modifies the global state in
+arbitrary ways is not just a theoretical problem.
+
+WDYT?
+
+>> Of course the above can be worked around by running ‘compile-file’ in a
+>> child process, but forking alone is more expensive than ‘compile-file’,
+>> so that’s not really a solution when there are many files.
+>
+> It's the N^2 expansion that's the problem, not the forking.  If you have
+> N files which depend on each other, then compiling each one will require
+> the expansion of approximately all N files, so N*N costs in number of
+> files.  Or N log N if you have a tree ordering of your files.  Anyway
+> it's badness.
+
+Right.  However, when compiling a set of files in a single process, one
+could expect previously-expanded files to be cached.
+
+> Glad to know that Taylan has fixed this one in Guix.
+
+I should mention that the hack in Guix to allow parallel compilation is
+brittle since shared state (module obarrays) can, in some cases, be
+accessed concurrently, and modules aren’t thread safe.
+
+Concretely, building all the files in Guix works well ~95% of the time;
+when only some files need rebuilding, it’s not uncommon to see it fail
+weirdly (“no such language” or a similarly obscure error.)
+
+Any idea how this could be addressed?
+
+Thanks!
+
+Ludo’.
+
+
+
+Message #22 received at 15602-done <at> debbugs.gnu.org (full text, mbox):
+
+From: Andy Wingo <wingo <at> pobox.com>
+To: ludo <at> gnu.org (Ludovic Courtès)
+Cc: 15602-done <at> debbugs.gnu.org
+Subject: Re: bug#15602: Compiling several files in the same session [2.0.9]
+Date: Tue, 21 Jun 2016 17:00:05 +0200
+
+Hi :)
+
+On Tue 21 Jun 2016 14:01, ludo <at> gnu.org (Ludovic Courtès) writes:
+
+> Andy Wingo <wingo <at> pobox.com> skribis:
+>
+>> On Sun 13 Oct 2013 15:51, ludo <at> gnu.org (Ludovic Courtès) writes:
+>>> I think the right thing would be to use a separate module hierarchy in
+>>> the dynamic extent of ‘compile-file’, somehow, such that all module side
+>>> effects are isolated.
+>>
+>> I don't think this is going to happen, for what that's worth :/
+>
+> What do you mean?
+>
+> Global state held in global variables is Bad.  To me, this is clearly an
+> area where things can and should be improved.  In a live-hacked,
+> long-running system, that ‘compile-file’ modifies the global state in
+> arbitrary ways is not just a theoretical problem.
+>
+> WDYT?
+
+Maybe you are right.  Maybe we need completely new data structures in
+the module subsystem to support excursions in which we make private
+changes to the module tree, and in which we can "commit" modifications
+to the main tree when they are intended to be installed globally.  Very
+tricky to get right though.
+
+My "I don't think this is going to happen" expressed a guess as to our
+ability to get this done, time- and interest-wise.  How much are you
+able to work on this?
+
+Andy
+
+
+
+Message #25 received at 15602-done <at> debbugs.gnu.org (full text, mbox):
+
+From: ludo <at> gnu.org (Ludovic Courtès)
+To: Andy Wingo <wingo <at> pobox.com>
+Cc: 15602-done <at> debbugs.gnu.org
+Subject: Re: bug#15602: Compiling several files in the same session [2.0.9]
+Date: Tue, 21 Jun 2016 17:17:20 +0200
+
+Andy Wingo <wingo <at> pobox.com> skribis:
+
+> On Tue 21 Jun 2016 14:01, ludo <at> gnu.org (Ludovic Courtès) writes:
+>
+>> Andy Wingo <wingo <at> pobox.com> skribis:
+>>
+>>> On Sun 13 Oct 2013 15:51, ludo <at> gnu.org (Ludovic Courtès) writes:
+>>>> I think the right thing would be to use a separate module hierarchy in
+>>>> the dynamic extent of ‘compile-file’, somehow, such that all module side
+>>>> effects are isolated.
+>>>
+>>> I don't think this is going to happen, for what that's worth :/
+>>
+>> What do you mean?
+>>
+>> Global state held in global variables is Bad.  To me, this is clearly an
+>> area where things can and should be improved.  In a live-hacked,
+>> long-running system, that ‘compile-file’ modifies the global state in
+>> arbitrary ways is not just a theoretical problem.
+>>
+>> WDYT?
+>
+> Maybe you are right.  Maybe we need completely new data structures in
+> the module subsystem to support excursions in which we make private
+> changes to the module tree, and in which we can "commit" modifications
+> to the main tree when they are intended to be installed globally.  Very
+> tricky to get right though.
+>
+> My "I don't think this is going to happen" expressed a guess as to our
+> ability to get this done, time- and interest-wise.  How much are you
+> able to work on this?
+
+I feel being cornered, which makes me feel bad.
+
+I think it’s reasonable and healthy to discuss, as a group, what’s worth
+fixing and how.
+
+Ludo’.
+
+
+
+Message #28 received at 15602-done <at> debbugs.gnu.org (full text, mbox):
+
+From: Andy Wingo <wingo <at> pobox.com>
+To: ludo <at> gnu.org (Ludovic Courtès)
+Cc: 15602-done <at> debbugs.gnu.org
+Subject: Re: bug#15602: Compiling several files in the same session [2.0.9]
+Date: Tue, 21 Jun 2016 17:30:39 +0200
+
+On Tue 21 Jun 2016 17:17, ludo <at> gnu.org (Ludovic Courtès) writes:
+
+> Andy Wingo <wingo <at> pobox.com> skribis:
+>
+>> On Tue 21 Jun 2016 14:01, ludo <at> gnu.org (Ludovic Courtès) writes:
+>>
+>>> Andy Wingo <wingo <at> pobox.com> skribis:
+>>>
+>>>> On Sun 13 Oct 2013 15:51, ludo <at> gnu.org (Ludovic Courtès) writes:
+>> My "I don't think this is going to happen" expressed a guess as to our
+>> ability to get this done, time- and interest-wise.  How much are you
+>> able to work on this?
+>
+> I feel being cornered, which makes me feel bad.
+
+I'm sorry I have made you feel this way.  My apologies.
+
+While we are expressing feelings, I feel like I have the entire burden
+of 2.2 on my own, and then people ask me to do even more work for them.
+
+I think I am growing a thicker skin though and recognizing the time I
+have available, and endeavoring not to care about things I have no time
+for.
+
+> I think it’s reasonable and healthy to discuss, as a group, what’s worth
+> fixing and how.
+
+I guess there are just many ways to go, but I find negative value for me
+for wishlists without associated effort.  It leads to this kind of
+conversation rather than fixing problems or releasing.  Not shipping is
+a problem in Guile and we need to find a way forward somehow.
+
+Andy
+
+
+
+Message #31 received at 15602 <at> debbugs.gnu.org (full text, mbox):
+
+From: Andy Wingo <wingo <at> pobox.com>
+To: Chris Vine <chris <at> cvine.freeserve.co.uk>
+Cc: Mark H Weaver <mhw <at> netris.org>, ludo <at> gnu.org, 15602 <at> debbugs.gnu.org,
+ 19235 <at> debbugs.gnu.org
+Subject: Re: bug#19235: make-fresh-user-module procedure leaks memory
+Date: Wed, 22 Jun 2016 19:52:01 +0200
+
+In many ways I think Ludovic was right in #15602 -- we should allow
+excursions to isolate changes to the module tree.  Sometimes you want an
+excursion to never add a module to the tree.  Sometimes you do, but
+maybe all in one go and with a mutex, to avoid races -- like, you could
+load a file or evaluate some code in a private fork of the module tree,
+but then commit it to the main tree afterwards.  Is that a sensible
+thing?
+
+Andy
+
+On Fri 26 Dec 2014 19:26, Chris Vine <chris <at> cvine.freeserve.co.uk> writes:
+
+> As far as I can tell the make-fresh-user-module procedure is not called
+> by guile itself, and providing a global mutex for it with a binding
+> enabling it to be called from scheme code seems to work fine.
+>
+> This also makes it straightforward to incorporate in a thread-safe
+> way the code you suggested to free stale user modules.  However, as I
+> mentioned, I am a bit reluctant to incorporate code which might break
+> in the future.  Is there any possibility that a "delete-module!"
+> procedure could be included within the public guile API for the next
+> release of guile?  It seems like something that could be useful to
+> anyone using non-default user modules in their code.
+>
+> Chris
+
+
+
+Message #34 received at 15602 <at> debbugs.gnu.org (full text, mbox):
+
+From: Mark H Weaver <mhw <at> netris.org>
+To: Andy Wingo <wingo <at> pobox.com>
+Cc: 15602 <at> debbugs.gnu.org, ludo <at> gnu.org,
+ Chris Vine <chris <at> cvine.freeserve.co.uk>, 19235 <at> debbugs.gnu.org
+Subject: Re: bug#19235: make-fresh-user-module procedure leaks memory
+Date: Thu, 23 Jun 2016 10:17:48 -0400
+
+Andy Wingo <wingo <at> pobox.com> writes:
+
+> In many ways I think Ludovic was right in #15602 -- we should allow
+> excursions to isolate changes to the module tree.  Sometimes you want an
+> excursion to never add a module to the tree.  Sometimes you do, but
+> maybe all in one go and with a mutex, to avoid races -- like, you could
+> load a file or evaluate some code in a private fork of the module tree,
+> but then commit it to the main tree afterwards.  Is that a sensible
+> thing?
+
+Yes, I agree.  In fact, I'd been thinking of something along those lines
+to enable thread-safe module loading.  More specifically, I was thinking
+that there should be a fluid variable that contains some additional
+modules that are not yet committed to the global module tree.
+
+Briefly, when a module is auto-loaded by a thread, the new module would
+initially be visible only to that thread, and also to any threads
+spawned by that thread during the auto-load.  Any attempts to access the
+module from other threads would block until the module is either fully
+loaded.
+
+One potential issue that has been troubling me is that in Guile's model,
+there's no guarantee that a module will _ever_ finish loading.  The main
+program itself could simply run from the auto-load.  That's why I think
+it's important to propagate permission to threads created during the
+auto-load, but maybe there will still be problems.
+
+    Thoughts?
+      Mark
+
+
+
+Message #37 received at 15602 <at> debbugs.gnu.org (full text, mbox):
+
+From: ludo <at> gnu.org (Ludovic Courtès)
+To: Mark H Weaver <mhw <at> netris.org>
+Cc: Andy Wingo <wingo <at> pobox.com>, 15602 <at> debbugs.gnu.org,
+ Chris Vine <chris <at> cvine.freeserve.co.uk>, 19235 <at> debbugs.gnu.org
+Subject: Re: bug#19235: make-fresh-user-module procedure leaks memory
+Date: Fri, 24 Jun 2016 10:04:24 +0200
+
+Mark H Weaver <mhw <at> netris.org> skribis:
+
+> Andy Wingo <wingo <at> pobox.com> writes:
+>
+>> In many ways I think Ludovic was right in #15602 -- we should allow
+>> excursions to isolate changes to the module tree.  Sometimes you want an
+>> excursion to never add a module to the tree.  Sometimes you do, but
+>> maybe all in one go and with a mutex, to avoid races -- like, you could
+>> load a file or evaluate some code in a private fork of the module tree,
+>> but then commit it to the main tree afterwards.  Is that a sensible
+>> thing?
+>
+> Yes, I agree.  In fact, I'd been thinking of something along those lines
+> to enable thread-safe module loading.  More specifically, I was thinking
+> that there should be a fluid variable that contains some additional
+> modules that are not yet committed to the global module tree.
+>
+> Briefly, when a module is auto-loaded by a thread, the new module would
+> initially be visible only to that thread, and also to any threads
+> spawned by that thread during the auto-load.  Any attempts to access the
+> module from other threads would block until the module is either fully
+> loaded.
+
+That sounds like a nice idea.
+
+In the current state of things, perhaps this behavior could be emulated
+by running ‘compile-file’ in a module excursion, and passing it a root
+module that’s a copy of ‘the-root-module’, something like that (though
+that would probably perform badly.)
+
+> One potential issue that has been troubling me is that in Guile's model,
+> there's no guarantee that a module will _ever_ finish loading.
+
+I think the fact that we evaluate all the top-level forms is
+problematic.  The R6RS phases were a great idea.  :-)
+
+> The main program itself could simply run from the auto-load.  That's
+> why I think it's important to propagate permission to threads created
+> during the auto-load, but maybe there will still be problems.
+
+I’m not sure what you mean by “propagate permission”?
+
+Ludo’.
+
+
+
+Message #40 received at 15602 <at> debbugs.gnu.org (full text, mbox):
+
+From: Mark H Weaver <mhw <at> netris.org>
+To: ludo <at> gnu.org (Ludovic Courtès)
+Cc: Andy Wingo <wingo <at> pobox.com>, 15602 <at> debbugs.gnu.org,
+ Chris Vine <chris <at> cvine.freeserve.co.uk>, 19235 <at> debbugs.gnu.org
+Subject: Re: bug#19235: make-fresh-user-module procedure leaks memory
+Date: Sat, 25 Jun 2016 20:50:56 -0400
+
+ludo <at> gnu.org (Ludovic Courtès) writes:
+
+> Mark H Weaver <mhw <at> netris.org> skribis:
+>
+>> One potential issue that has been troubling me is that in Guile's model,
+>> there's no guarantee that a module will _ever_ finish loading.
+>
+> I think the fact that we evaluate all the top-level forms is
+> problematic.  The R6RS phases were a great idea.  :-)
+>
+>> The main program itself could simply run from the auto-load.  That's
+>> why I think it's important to propagate permission to threads created
+>> during the auto-load, but maybe there will still be problems.
+>
+> I’m not sure what you mean by “propagate permission”?
+
+I mean: propagate permission to access the not-yet-committed module.
+For example, suppose a program loads a module that runs the main event
+loop as a top-level form in its body.  This module will never be
+committed to the global module table, because it never finishes loading.
+Now suppose that it spawns some new threads.  Those threads should have
+access to the module.
+
+Similarly, if a module uses 'par-for-each' to initialize some tables,
+the spawned threads should have access to the module being loaded.
+
+      Mark

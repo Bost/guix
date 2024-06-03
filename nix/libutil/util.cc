@@ -547,7 +547,7 @@ void createSymlink(const Path & target, const Path & link)
 
 
 LogType logType = ltPretty;
-Verbosity verbosity = lvlInfo;
+Verbosity verbosity = lvlVomit;
 
 static int nestingLevel = 0;
 
@@ -1293,6 +1293,7 @@ Agent::Agent(const string &commandOrig, const Strings &args, const std::map<stri
     debug(format("starting agent commandOrig: '%1%'") % commandOrig);
     debug(format("starting agent commandNew : '%1%'") % commandNew);
     const string &command = commandNew;
+    // const string &command = commandOrig;
     debug(format("starting agent command: '%1%'") % command);
 
     /* Create a pipe to get the output of the child. */

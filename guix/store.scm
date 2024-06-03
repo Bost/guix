@@ -1486,7 +1486,9 @@ When a handler is installed with 'with-build-handler', it is called any time
                     (format #t "[build-things] store : ~a\n" store)
                     (format #t "[build-things] things : ~a\n" things)
                     (format #t "[build-things] mode : ~a\n" mode)
-                    (build store things mode))
+                    (let [(build-result (build store things mode))]
+                      (format #t "[build-things] build-result : ~a\n" build-result)
+                      build-result))
                   (if (= mode (build-mode normal))
                       (build/old store things)
                       (raise (condition (&store-protocol-error

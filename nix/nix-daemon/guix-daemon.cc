@@ -271,7 +271,7 @@ parse_opt (int key, char *arg, struct argp_state *state)
       settings.set ("discover", useDiscover ? "true" : "false");
       break;
     case GUIX_OPT_DEBUG:
-      verbosity = lvlDebug;
+      verbosity = lvlVomit;
       break;
     case GUIX_OPT_GC_KEEP_OUTPUTS:
       settings.gcKeepOutputs = string_to_bool (arg);
@@ -535,6 +535,16 @@ main (int argc, char *argv[])
       settings.update ();
       printMsg(lvlDebug,
 	       format ("build log compression: %1%") % settings.logCompression);
+
+      printMsg(lvlError, "[guix-daemon.cc] printMsg: lvlError");
+      printMsg(lvlInfo, "[guix-daemon.cc] printMsg: lvlInfo");
+      printMsg(lvlTalkative, "[guix-daemon.cc] printMsg: lvlTalkative");
+      printMsg(lvlChatty, "[guix-daemon.cc] printMsg: lvlChatty");
+      printMsg(lvlDebug, "[guix-daemon.cc] printMsg: lvlDebug");
+      printMsg(lvlVomit, "[guix-daemon.cc] printMsg: lvlVomit");
+      printMsg(lvlDebug, format("[guix-daemon.cc] settings.buildVerbosity: %1%") % settings.buildVerbosity);
+      printMsg(lvlDebug, format("[guix-daemon.cc] settings.printBuildTrace: %1%") % settings.printBuildTrace);
+      printMsg(lvlDebug, format("[guix-daemon.cc] settings.showTrace: %1%") % settings.showTrace);
 
       if (geteuid () == 0 && settings.buildUsersGroup.empty ())
 	fprintf (stderr, _("warning: daemon is running as root, so \

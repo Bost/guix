@@ -27,7 +27,7 @@ Settings::Settings()
     keepFailed = false;
     keepGoing = false;
     tryFallback = false;
-    buildVerbosity = lvlError;
+    buildVerbosity = lvlVomit;
     maxBuildJobs = 1;
     buildCores = 1;
     readOnlyMode = false;

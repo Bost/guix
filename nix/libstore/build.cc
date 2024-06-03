@@ -1531,6 +1531,7 @@ HookReply DerivationGoal::tryBuildHook()
             (format("%1%") % settings.buildTimeout).str().c_str()
 	};
 
+        debug(format("DerivationGoal::tryBuildHook()"));
         worker.hook = std::make_shared<Agent>(settings.guixProgram, args);
     }
 
@@ -3090,6 +3091,7 @@ void SubstitutionGoal::tryToRun()
 	      + (settings.autoOptimiseStore ? "yes" : "no")
 	    }
 	};
+        debug(format("SubstitutionGoal::referencesValid()"));
 	worker.substituter = std::make_shared<Agent>(settings.guixProgram, args, env);
     }
 

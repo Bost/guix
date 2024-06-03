@@ -98,11 +98,27 @@ fi
 
 guix_prompt
 
-if [ -z ${GUIX_DAEMON_SOCKET+x} ]; then
-    printf "\nGUIX_DAEMON_SOCKET is not set\n"
-else
-    printf "\nGUIX_DAEMON_SOCKET: %s\n" $GUIX_DAEMON_SOCKET
-fi
+# j="jjj"
+# k="kkk"
+
+# # ${!i} - Bash variable expansion/indirection (gets the value of the variable name held by $i)
+# for i in j k; do echo "$i = ${!i}"; done
+
+# # If you have bash v4.4 or later you can use ${VAR@A} Parameter expansion operator.
+# # This is discussed in the Bash manual under section 3.5.3 Shell Parameter Expansion
+# #     'A' Operator
+# #     The expansion is a string in the form of an assignment statement or declare command that, if evaluated, will recreate parameter with its attributes and value.
+# for i in {j,k}; do echo "${!i@A}"; done
+
+printf "\n"
+
+for i in GUIX_DAEMON_SOCKET _NIX_OPTIONS GUIX_OPT_DEBUG; do
+    guile -c '(format #t "'$i' : ~a\n" (let [(i (getenv "'$i'"))] (cond [(string? i) (if (string-null? i) "defined as empty string" i)] [#t "undefined"]))) '
+done
+
+# make check TESTS="tests/store.scm"
+# make --jobs=24 check TESTS="tests/store.scm"
+# make --jobs=24 check TESTS="tests/my-store.scm"
 
 # Adjust the prompt depending on whether we're in 'guix environment'.
 if [ -n "$GUIX_ENVIRONMENT" ]

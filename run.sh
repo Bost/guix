@@ -58,11 +58,15 @@ done
 # --share=/usr/bin \
 # --share=$wd/etc=/usr/etc \
 
-export GUIX_DAEMON_SOCKET=/tmp/guix-devel-socket.socket
+# export GUIX_DAEMON_SOCKET=/tmp/guix-devel-socket.socket
+# export _NIX_OPTIONS=1
+# export GUIX_OPT_DEBUG=1
 
 set -x
 guix shell \
      --container --network \
+     --pure \
+     --nesting \
      --share=$HOME/.bash_history=$HOME/.bash_history \
      --share=$wd/.bash_profile=$HOME/.bash_profile \
      --share=$wd/.bashrc=$HOME/.bashrc \
@@ -71,7 +75,8 @@ guix shell \
      --share=/tmp \
      --share=/var \
      '--preserve=^GUIX_DAEMON_SOCKET$' \
+     '--preserve=^_NIX_OPTIONS$' \
+     '--preserve=^GUIX_OPT_DEBUG$' \
      --development guix \
      gzip libzip gnupg sudo which direnv help2man git strace glibc-locales bash \
-     --pure \
      -- bash

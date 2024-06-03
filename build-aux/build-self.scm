@@ -35,7 +35,7 @@
 ;;; Commentary:
 ;;;
 ;;; When loaded, this module returns a monadic procedure of at least one
-;;; argument: the source tree to build.  It returns a derivation that
+;;; argument: ->> the source tree to build <<-.  It returns a derivation that
 ;;; builds it.
 ;;;
 ;;; This file uses modules provided by the already-installed Guix.  Those
@@ -60,6 +60,8 @@
     %guix-version
     %guix-bug-report-address
     %guix-home-page-url))
+
+(format #t "%persona-variables : ~a\n" %persona-variables)
 
 (define %config-variables
   ;; (guix config) variables corresponding to Guix configuration.
@@ -247,6 +249,10 @@ interface (FFI) of Guile.")
 If BUILT-IN-BUILDERS is provided, it should be a list of
 strings and this will be used instead of the builtin builders provided by the
 build daemon, from within the generated build program."
+  (format #t "[build-self build-program] source : ~a\n" source)
+  (format #t "[build-self build-program] version : ~a\n" version)
+  (format #t "[build-self build-program] channel-metadata : ~a\n" channel-metadata)
+
   (define select?
     ;; Select every module but (guix config) and non-Guix modules.
     ;; Also exclude (guix channels): it is autoloaded by (guix describe), but
@@ -420,6 +426,10 @@ Display a spinner when nothing happens."
                 #:rest rest)
   "Return a derivation that unpacks SOURCE into STORE and compiles Scheme
 files."
+
+  (format #t "[build-self build] source : ~a\n" source)
+  (format #t "[build-self build] channel-metadata : ~a\n" channel-metadata)
+
   ;; Build the build program and then use it as a trampoline to build from
   ;; SOURCE.
   (mlet %store-monad ((build  (build-program source version guile-version
@@ -472,7 +482,7 @@ files."
                                            (logior major minor))
                                           "none")
                                       node))))))
-        (format (current-error-port) "Computing Guix derivation for '~a'...  "
+        (format (current-error-port) "XXX Computing Guix derivation for '~a'...  "
                 system)
 
         ;; Wait for a connection on SOCK and proxy build output so it can be
@@ -483,6 +493,8 @@ files."
            (close-port sock)
            (delete-file node)
            (proxy port (current-build-output-port))))
+
+        (format (current-error-port) "[build-self] done")
 
         ;; Now that the build output connection was closed, read the result, a
         ;; derivation file name, from PIPE.

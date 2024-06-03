@@ -1,0 +1,71 @@
+#+begin_src fish :results replace output
+set sFiles (rg --files-with-matches --type cpp '\\S+.*lvl')
+set ptrn "lvlError\|lvlInfo\|lvlTalkative\|lvlChatty\|lvlDebug"
+set repl "lvlVomit"
+echo sed --in-place "s/$ptrn/$repl/g" $sFiles
+#+end_src
+
+
+#+begin_src log :results replace output
+[build-derivations] store : #<store-connection 256.100 7f237894c2d0>
+[build-derivations] mode : 0
+[build-derivations] 0 (? derivation? drv)
+[build-derivations] 0 drv : #<derivation /gnu/store/91yaynj6rh3baimpm27lprmd9a8yqyy9-compute-guix-derivation.drv => /gnu/store/xb7jgdrqhswnvh7dj78slidadfgff7m6-compute-guix-derivation 7f2378983fa0>
+[build-things] store : #<store-connection 256.100 7f237894c2d0>
+[build-things] things : (/gnu/store/91yaynj6rh3baimpm27lprmd9a8yqyy9-compute-guix-derivation.drv)
+[build-things] mode : 0
+[build-things] build-result : #t
+Computing Guix derivation for 'x86_64-linux'... |
+[gexp compiled-modules] modules: ()
+[gexp imported-modules] modules: ()
+[gexp imported-modules] modules: ()
+[gexp compiled-modules] modules: ()
+[gexp imported-modules] modules: ()
+[gexp imported-modules] modules: ()
+[gexp imported-modules] modules: ((guix build perl-build-system) (guix build gnu-build-system) (guix build utils) (guix build gremlin) (guix elf))
+[gexp compiled-modules] modules: ((guix build perl-build-system) (guix build gnu-build-system) (guix build utils) (guix build gremlin) (guix elf))
+[gexp imported-modules] modules: ((guix build perl-build-system) (guix build gnu-build-system) (guix build utils) (guix build gremlin) (guix elf))
+[gexp imported-modules] modules: ((guix build profiles) (guix build union) (guix build utils) (guix search-paths) (guix records))
+[gexp compiled-modules] modules: ((guix build profiles) (guix build union) (guix build utils) (guix search-paths) (guix records))
+[gexp imported-modules] modules: ((guix build profiles) (guix build union) (guix build utils) (guix search-paths) (guix records))
+[gexp imported-modules] modules: ((guix build utils) (guix build union) (srfi srfi-26))
+[gexp compiled-modules] modules: ((guix build utils) (guix build union) (srfi srfi-26))
+[gexp imported-modules] modules: ((guix build utils) (guix build union) (srfi srfi-26))
+[cached-channel-instance] channel-instances :
+[cached-channel-instance]    guix
+[cached-channel-instance]    my-channel-c
+[cached-channel-instance]    my-channel-b
+[cached-channel-instance]    my-channel-a
+[cached-channel-instance] channel-derivation : #<derivation /gnu/store/1y7m2aznp2hm8rxv9ywg2fv2kw691azb-profile.drv => /gnu/store/dwbdq6q4yq4adpq2qkr6j8mnhf9gqz00-profile 7f236aaff000>
+[cached-channel-instance] (mbegin %store-monad ...) ...
+[cached-channel-instance] profile-derivations : #<procedure 7f236ab2e380 at guix/store.scm:2104:28 (store)>
+[build-derivations] store : #<store-connection 256.100 7f236bf401e0>
+[build-derivations] mode : 0
+[build-derivations] 0 (? derivation? drv)
+[build-derivations] 0 drv : #<derivation /gnu/store/1y7m2aznp2hm8rxv9ywg2fv2kw691azb-profile.drv => /gnu/store/dwbdq6q4yq4adpq2qkr6j8mnhf9gqz00-profile 7f236aaff000>
+substitute: updating substitutes from 'https://substitutes.nonguix.org'... 100.0%
+substitute: updating substitutes from 'https://bordeaux.guix.gnu.org'... 100.0%
+substitute: updating substitutes from 'https://ci.guix.gnu.org'... 100.0%
+[show-what-to-build] %default-verbosity : 2
+[show-what-to-build] verbosity : 3
+The following derivations will be built:
+  /gnu/store/1y7m2aznp2hm8rxv9ywg2fv2kw691azb-profile.drv
+  /gnu/store/1jp79kf7cj5f4jji9flcbr5xcn5b8snh-my-channel-c.drv
+  /gnu/store/625fqircvwiva81nbhy5gsgm5jpcba5n-profile.drv
+  /gnu/store/7x4sy7rx4gdb6vrz0n0d64fqpd248ji5-inferior-script.scm.drv
+The following profile hooks will be built:
+   /gnu/store/hz2446drmir1p28vxb9q14pfqcvwdyv9-emacs-subdirs.drv
+   /gnu/store/l8hcciyxvdzkwll2ixaywhfq770d0mw0-fonts-dir.drv
+   /gnu/store/ldm2wdr8hljxl6wgpcz5niybsl5wvr93-ca-certificate-bundle.drv
+   /gnu/store/mhdb22qrr5yhsz0k7a4ga8ldimdjvd1z-guix-package-cache.drv
+   /gnu/store/wc3dny086j9s4p9sfwdfllr1m49zkllc-info-dir.drv
+[build-things] store : #<store-connection 256.100 7f236bf401e0>
+[build-things] things : (/gnu/store/1y7m2aznp2hm8rxv9ywg2fv2kw691azb-profile.drv)
+[build-things] mode : 0
+building /gnu/store/1jp79kf7cj5f4jji9flcbr5xcn5b8snh-my-channel-c.drv...
+builder for `/gnu/store/1jp79kf7cj5f4jji9flcbr5xcn5b8snh-my-channel-c.drv' failed to produce output path `/gnu/store/m8hi7s1z3nha21s1hbk3pb9vmcxj1dj2-my-channel-c'
+build of /gnu/store/1jp79kf7cj5f4jji9flcbr5xcn5b8snh-my-channel-c.drv failed
+View build log at '/var/log/guix/drvs/1j/p79kf7cj5f4jji9flcbr5xcn5b8snh-my-channel-c.drv.gz'.
+cannot build derivation `/gnu/store/1y7m2aznp2hm8rxv9ywg2fv2kw691azb-profile.drv': 1 dependencies couldn't be built
+guix time-machine: error: build of `/gnu/store/1y7m2aznp2hm8rxv9ywg2fv2kw691azb-profile.drv' failed
+#+end_src
