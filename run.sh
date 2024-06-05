@@ -58,10 +58,11 @@ done
 # --share=/usr/bin \
 # --share=$wd/etc=/usr/etc \
 
-# export GUIX_DAEMON_SOCKET=/tmp/guix-devel-socket.socket
+export GUIX_DAEMON_SOCKET=/tmp/guix-devel-socket.socket
 # export _NIX_OPTIONS=1
 # export GUIX_OPT_DEBUG=1
 
+# libgcrypt is needed for `make --jobs=24 check TESTS="tests/guix-daemon.sh"`
 set -x
 guix shell \
      --container --network \
@@ -79,4 +80,6 @@ guix shell \
      '--preserve=^GUIX_OPT_DEBUG$' \
      --development guix \
      gzip libzip gnupg sudo which direnv help2man git strace glibc-locales bash \
+     libgcrypt \
+     ripgrep bat \
      -- bash

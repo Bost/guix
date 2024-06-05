@@ -482,7 +482,7 @@ files."
                                            (logior major minor))
                                           "none")
                                       node))))))
-        (format (current-error-port) "XXX Computing Guix derivation for '~a'...  "
+        (format (current-error-port) "XXXYYY Computing Guix derivation for '~a'...  "
                 system)
 
         ;; Wait for a connection on SOCK and proxy build output so it can be
