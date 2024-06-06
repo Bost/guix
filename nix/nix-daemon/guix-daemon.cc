@@ -420,8 +420,8 @@ listening_sockets (const std::list<std::string> &options)
 	    throw Error(format ("failed to look up '%1%': %2%")
 			% option % gai_strerror (err));
 
-	  printMsg (lvlDebug, format ("listening on '%1%', port '%2%'")
-		    % host % port);
+          printMsg (lvlDebug, format ("[guix-daemon] listening on '%1%', port '%2%'")
+                    % host % port);
 
 	  /* XXX: Pick the first result, RES.  */
 	  result.push_back (open_inet_socket (res->ai_addr,
@@ -534,31 +534,41 @@ main (int argc, char *argv[])
       /* Effect all the changes made via 'settings.set'.  */
       settings.update ();
       printMsg(lvlDebug,
-	       format ("build log compression: %1%") % settings.logCompression);
+               format ("[guix-daemon] build log compression: %1%") % settings.logCompression);
 
-      printMsg(lvlError, "[guix-daemon.cc] printMsg: lvlError");
-      printMsg(lvlInfo, "[guix-daemon.cc] printMsg: lvlInfo");
-      printMsg(lvlTalkative, "[guix-daemon.cc] printMsg: lvlTalkative");
-      printMsg(lvlChatty, "[guix-daemon.cc] printMsg: lvlChatty");
-      printMsg(lvlDebug, "[guix-daemon.cc] printMsg: lvlDebug");
-      printMsg(lvlVomit, "[guix-daemon.cc] printMsg: lvlVomit");
-      printMsg(lvlDebug, format("[guix-daemon.cc] settings.buildVerbosity: %1%") % settings.buildVerbosity);
-      printMsg(lvlDebug, format("[guix-daemon.cc] settings.printBuildTrace: %1%") % settings.printBuildTrace);
-      printMsg(lvlDebug, format("[guix-daemon.cc] settings.showTrace: %1%") % settings.showTrace);
+      // printMsg(lvlError, "[guix-daemon] printMsg: lvlError");
+      // printMsg(lvlInfo, "[guix-daemon] printMsg: lvlInfo");
+      // printMsg(lvlTalkative, "[guix-daemon] printMsg: lvlTalkative");
+      // printMsg(lvlChatty, "[guix-daemon] printMsg: lvlChatty");
+      // printMsg(lvlDebug, "[guix-daemon] printMsg: lvlDebug");
+      // printMsg(lvlVomit, "[guix-daemon] printMsg: lvlVomit");
+
+      printMsg(lvlDebug, format("[guix-daemon] processEnvironment settings.nixStore: %1%") % settings.nixStore);
+      printMsg(lvlDebug, format("[guix-daemon] processEnvironment settings.nixLogDir: %1%") % settings.nixLogDir);
+      printMsg(lvlDebug, format("[guix-daemon] processEnvironment settings.nixStateDir: %1%") % settings.nixStateDir);
+      printMsg(lvlDebug, format("[guix-daemon] processEnvironment settings.nixDBPath: %1%") % settings.nixDBPath);
+      printMsg(lvlDebug, format("[guix-daemon] processEnvironment settings.nixConfDir: %1%") % settings.nixConfDir);
+      printMsg(lvlDebug, format("[guix-daemon] processEnvironment settings.nixBinDir: %1%") % settings.nixBinDir);
+      printMsg(lvlDebug, format("[guix-daemon] processEnvironment settings.nixDaemonSocketFile: %1%") % settings.nixDaemonSocketFile);
+      printMsg(lvlDebug, format("[guix-daemon] processEnvironment settings.guixProgram: %1%") % settings.guixProgram);
+
+      printMsg(lvlDebug, format("[guix-daemon] settings.buildVerbosity: %1%") % settings.buildVerbosity);
+      printMsg(lvlDebug, format("[guix-daemon] settings.printBuildTrace: %1%") % settings.printBuildTrace);
+      printMsg(lvlDebug, format("[guix-daemon] settings.showTrace: %1%") % settings.showTrace);
 
       if (geteuid () == 0 && settings.buildUsersGroup.empty ())
 	fprintf (stderr, _("warning: daemon is running as root, so \
 using `--build-users-group' is highly recommended\n"));
 
       if (settings.useChroot)
-	{
-	  std::string chroot_dirs;
+        {
+          std::string chroot_dirs;
 
-	  chroot_dirs = settings.get ("build-extra-chroot-dirs",
-				      (std::string) "");
-	  printMsg (lvlDebug,
-		    format ("extra chroot directories: '%1%'") % chroot_dirs);
-	}
+          chroot_dirs = settings.get ("build-extra-chroot-dirs",
+                                      (std::string) "");
+          printMsg (lvlDebug,
+                    format ("[guix-daemon] extra chroot directories: '%1%'") % chroot_dirs);
+        }
 
       if (useDiscover)
       {
@@ -573,8 +583,8 @@ using `--build-users-group' is highly recommended\n"));
       }
 
       printMsg (lvlDebug,
-		format ("automatic deduplication set to %1%")
-		% settings.autoOptimiseStore);
+                format ("[guix-daemon] automatic deduplication set to %1%")
+                % settings.autoOptimiseStore);
 
       run (sockets);
     }

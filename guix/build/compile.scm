@@ -238,6 +238,7 @@ files are for HOST, a GNU triplet such as \"x86_64-linux-gnu\"."
                      #:opts (append warning-options
                                     (optimization-options relative))))))
 
+  (format #t "[compile] files : ~a\n" files)
   (with-augmented-search-path %load-path source-directory
     (with-augmented-search-path %load-compiled-path build-directory
       (with-fluids ((*current-warning-prefix* ""))

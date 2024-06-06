@@ -69,19 +69,12 @@ guix_prompt () {
    | |__| | |\  | |__| | | |__| | |_| | |>  <
     \_____|_| \_|\____/   \_____|\__,_|_/_/\_\
 
-# 1.   Before starting Guix-Shell:
-# 1.1. Kill default guix-daemon:
-     sudo herd stop guix-daemon
-# 1.2. Start development version of guix-daemon:
-    ./guix-daemon-devel.sh
-# 2. Start Guix-Shell:
-    ./run.sh
-# 3. Start the Guix-Time-machine(s):
-    guix-time-machine-a    # alias: gta
-    guix-time-machine-ab   # alias: gtab
-    guix-time-machine-abc  # alias: gtabc
-# 4. After exiting Guix-Shell start default guix-daemon:
-    sudo herd start guix-daemon
+Start development version of guix-daemon: ./guix-daemon-devel.sh
+Start Guix-Shell:                         ./run.sh
+Start the Guix-Time-machine(s):           guix-time-machine-a    # alias: gta
+                                          guix-time-machine-ab   # alias: gtab
+                                          guix-time-machine-abc  # alias: gtabc
+make --jobs=24 check TESTS="tests/guix-daemon.sh"
 EOF
 }
 

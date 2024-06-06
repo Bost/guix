@@ -24,8 +24,12 @@ set -e
 
 guix-daemon --version
 guix build --version
-
+# printf "======================================= 0001\n"
+# guix build tar -d
+# printf "======================================= 0002\n"
 drv="`guix build emacs -d`"
+# printf "======================================= 0003\n"
+
 out="`guile -c '								\
   (use-modules (guix) (gnu packages emacs))					\
   (define store (open-connection))						\

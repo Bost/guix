@@ -1538,7 +1538,7 @@ void LocalStore::verifyPath(const Path & path, const PathSet & store,
     done.insert(path);
 
     if (!isStorePath(path)) {
-        printMsg(lvlError, format("path `%1%' is not in the store") % path);
+        printMsg(lvlError, format("[local-store verifyPath] path `%1%' is not in the store") % path);
         invalidatePath(path);
         return;
     }

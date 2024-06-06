@@ -622,7 +622,7 @@ static void performOp(bool trusted, unsigned int clientVersion,
                     if (pw != NULL)
                         store->createUser(value, pw->pw_uid);
                     else
-                        printMsg(lvlInfo, format("user name %1% not found") % value);
+                        printMsg(lvlInfo, format("[nix-daemon] user name %1% not found") % value);
 		}
                 else
                     settings.set(trusted ? name : "untrusted-" + name, value);
@@ -812,7 +812,7 @@ static void processConnection(bool trusted, uid_t userId)
             if (pw != NULL && pw->pw_name != NULL)
                 store->createUser(pw->pw_name, userId);
             else
-                printMsg(lvlInfo, format("user with UID %1% not found") % userId);
+                printMsg(lvlInfo, format("[nix-daemon] user with UID %1% not found") % userId);
 	}
 
         stopWork();
@@ -860,7 +860,7 @@ static void processConnection(bool trusted, uid_t userId)
 
     canSendStderr = false;
     _isInterrupted = false;
-    printMsg(lvlDebug, format("%1% operations") % opCount);
+    printMsg(lvlDebug, format("[nix-daemon] %1% operations") % opCount);
 }
 
 
@@ -947,7 +947,7 @@ static void acceptConnection(int fdSocket)
             string user = pw ? pw->pw_name : std::to_string(cred.uid);
 
 	    printMsg(lvlInfo,
-		     format((string) "accepted connection from pid %1%, user %2%")
+		     format((string) "[nix-daemon] accepted connection from pid %1%, user %2%")
 		     % clientPid % user);
 #endif
 	} else {
@@ -968,7 +968,7 @@ static void acceptConnection(int fdSocket)
 
 	    if (result != NULL) {
 		printMsg(lvlInfo,
-			 format("accepted connection from %1%")
+			 format("[nix-daemon] accepted connection from %1%")
 			 % address_str);
 	    }
 	}
@@ -1008,7 +1008,7 @@ static void acceptConnection(int fdSocket)
     } catch (Interrupted & e) {
 	throw;
     } catch (Error & e) {
-	printMsg(lvlError, format("error processing connection: %1%") % e.msg());
+	printMsg(lvlError, format("[nix-daemon] error processing connection: %1%") % e.msg());
     }
 }
 

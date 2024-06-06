@@ -32,14 +32,14 @@ bool isStorePath(const Path & path)
 void assertStorePath(const Path & path)
 {
     if (!isStorePath(path))
-        throw Error(format("path `%1%' is not in the store") % path);
+        throw Error(format("[store-api assertStorePath] path `%1%' is not in the store") % path);
 }
 
 
 Path toStorePath(const Path & path)
 {
     if (!isInStore(path))
-        throw Error(format("path `%1%' is not in the store") % path);
+        throw Error(format("[store-api toStorePath] path `%1%' is not in the store") % path);
     Path::size_type slash = path.find('/', settings.nixStore.size() + 1);
     if (slash == Path::npos)
         return path;
