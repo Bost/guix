@@ -35898,18 +35898,19 @@ following configuration:
 
 @lisp
 (service xvnc-service-type
-         (xvnc-configuration (display-number 10)))
+         (xvnc-configuration (display-number 5)))
 @end lisp
 
 As a demonstration, the @command{xclock} command could then be started
 on the remote machine on display number 10, and it could be displayed
-locally via the @command{vncviewer} command:
+locally using the SSH tunneling mechanism, via the @command{vncviewer}
+command:
 @example
 # Start xclock on the remote machine.
-ssh -L5910:localhost:5910 @var{your-host} -- guix shell xclock \
-    -- env DISPLAY=:10 xclock
-# Access it via VNC.
-guix shell tigervnc-client -- vncviewer localhost:5910
+ssh -L5906:localhost:5905 @var{your-host} -- guix shell xclock \
+    -- env DISPLAY=:5 xclock
+# Access the xclock via VNC.
+guix shell tigervnc-client -- vncviewer localhost:5906
 @end example
 
 The following configuration combines XDMCP and Inetd to allow multiple
