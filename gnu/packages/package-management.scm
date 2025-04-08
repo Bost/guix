@@ -2040,135 +2040,144 @@ the boot loader configuration.")
     (license license:lgpl2.0+)))
 
 (define-public flatpak
-  (package
-    (name "flatpak")
-    (version "1.16.0")
-    (source
-     (origin
-       (method url-fetch)
-       (uri (string-append "https://github.com/flatpak/flatpak/releases/download/"
-                           version "/flatpak-" version ".tar.xz"))
-       (sha256
-        (base32 "0ajbz8ms4h5nyjr59hv9z8vaimj4f3p51v8idmy14qnbmmjwa2nb"))
-       (patches
-        (search-patches "flatpak-fix-fonts-icons.patch"
-                        "flatpak-fix-path.patch"
-                        "flatpak-fix-icon-validation.patch"
-                        "flatpak-unset-gdk-pixbuf-for-sandbox.patch"))))
-    (build-system meson-build-system)
-    (arguments
-     (list
-      #:configure-flags
-      #~(list
-         "-Dsystem_helper=disabled"
-         "-Dlocalstatedir=/var"
-         (string-append "-Dsystem_bubblewrap="
-                        (assoc-ref %build-inputs "bubblewrap")
-                        "/bin/bwrap")
-         (string-append "-Dsystem_dbus_proxy="
-                        (assoc-ref %build-inputs "xdg-dbus-proxy")
-                        "/bin/xdg-dbus-proxy"))
-      #:phases
-      #~(modify-phases %standard-phases
-          (add-after 'unpack 'disable-failing-tests
-            (lambda _
-              (substitute* "tests/test-matrix/meson.build"
-                ;; The following tests fail with error message related to fusermount3
-                ;; failing an unmount operation ("No such file or directory").
-                (("^.*test-http-utils.*$") "")
-                (("^.*test-summaries@system.wrap.*$") "")
-                (("^.*test-prune.*$") ""))))
-          (add-after 'unpack 'fix-tests
-            (lambda* (#:key inputs #:allow-other-keys)
-              (copy-recursively
-               (search-input-directory inputs "lib/locale")
-               "/tmp/locale")
-              (for-each make-file-writable (find-files "/tmp"))
-              (substitute* "tests/make-test-runtime.sh"
-                (("cp `which.*") "echo guix\n")
-                (("cp -r /usr/lib/locale/C\\.\\*")
-                 (string-append "mkdir ${DIR}/usr/lib/locale/en_US; \
+  (let ((release "1.16.0")
+        (revision "1"))
+    (package
+      (name "flatpak")
+      (version (string-append release "-" revision))
+      (source
+       (origin
+         (method url-fetch)
+         (uri (string-append "https://github.com/flatpak/flatpak/releases/download/"
+                             release "/flatpak-" release ".tar.xz"))
+         (sha256
+          (base32 "0ajbz8ms4h5nyjr59hv9z8vaimj4f3p51v8idmy14qnbmmjwa2nb"))
+         (patches
+          (search-patches "flatpak-fix-fonts-icons.patch"
+                          "flatpak-fix-path.patch"
+                          "flatpak-fix-icon-validation.patch"
+                          "flatpak-unset-gdk-pixbuf-for-sandbox.patch"))))
+      (build-system meson-build-system)
+      (arguments
+       (list
+        #:configure-flags
+        #~(list
+           "-Dsystem_helper=disabled"
+           "-Dlocalstatedir=/var"
+           (string-append "-Dsystem_bubblewrap="
+                          (assoc-ref %build-inputs "bubblewrap")
+                          "/bin/bwrap")
+           (string-append "-Dsystem_dbus_proxy="
+                          (assoc-ref %build-inputs "xdg-dbus-proxy")
+                          "/bin/xdg-dbus-proxy"))
+        #:phases
+        #~(modify-phases %standard-phases
+            (add-after 'unpack 'disable-failing-tests
+              (lambda _
+                (substitute* "tests/test-matrix/meson.build"
+                  ;; The following tests fail with error message related to fusermount3
+                  ;; failing an unmount operation ("No such file or directory").
+                  (("^.*test-http-utils.*$") "")
+                  (("^.*test-summaries@system.wrap.*$") "")
+                  (("^.*test-prune.*$") ""))))
+            (add-after 'unpack 'fix-tests
+              (lambda* (#:key inputs #:allow-other-keys)
+                (copy-recursively
+                 (search-input-directory inputs "lib/locale")
+                 "/tmp/locale")
+                (for-each make-file-writable (find-files "/tmp"))
+                (substitute* "tests/make-test-runtime.sh"
+                  (("cp `which.*") "echo guix\n")
+                  (("cp -r /usr/lib/locale/C\\.\\*")
+                   (string-append "mkdir ${DIR}/usr/lib/locale/en_US; \
 cp -r /tmp/locale/*/en_US.*")))
-              (substitute* "tests/libtest.sh"
-                (("/bin/kill") (which "kill"))
-                (("/usr/bin/python3") (which "python3")))
-              #t))
-          (add-after 'unpack 'p11-kit-fix
-            (lambda* (#:key inputs #:allow-other-keys)
-              (let ((p11-path (search-input-file inputs "/bin/p11-kit")))
-                (substitute* "session-helper/flatpak-session-helper.c"
-                  (("\"p11-kit\",")
-                   (string-append "\"" p11-path "\","))
-                  (("if \\(g_find_program_in_path \\(\"p11-kit\"\\)\\)")
-                   (string-append "if (g_find_program_in_path (\""
-                                  p11-path "\"))"))))))
-          (add-after 'unpack 'fix-icon-validation
-            (lambda* (#:key outputs #:allow-other-keys)
-              (let* ((out (assoc-ref outputs "out"))
-                     (store (dirname out)))
-                (substitute* "icon-validator/validate-icon.c"
-                  (("@storeDir@") store)))))
-          (add-before 'check 'pre-check
-            (lambda _
-              ;; Set $HOME to writable location for testcommon tests.
-              (setenv "HOME" "/tmp")))
-          (add-after 'install 'wrap-flatpak
-            (lambda* (#:key inputs #:allow-other-keys)
-              (let ((flatpak (string-append #$output "/bin/flatpak"))
-                    (glib-networking (assoc-ref inputs "glib-networking")))
-                (wrap-program flatpak
-                  ;; Allow GIO to find TLS backend.
-                  `("GIO_EXTRA_MODULES" prefix
-                    (,(string-append glib-networking "/lib/gio/modules"))))))))))
-    (native-inputs
-     (list bison
-           dbus ; for dbus-daemon
-           gettext-minimal
-           `(,glib "bin") ; for glib-mkenums + gdbus-codegen
-           gtk-doc
-           (libc-utf8-locales-for-target)
-           gobject-introspection
-           libcap
-           pkg-config
-           python
-           python-pyparsing
-           socat
-           which))
-    (inputs
-     (list appstream
-           appstream-glib
-           bash-minimal
-           bubblewrap
-           curl
-           fuse
-           gdk-pixbuf
-           libcap
-           libostree
-           libsoup-minimal-2
-           libxml2
-           p11-kit
-           polkit
-           util-linux
-           xdg-dbus-proxy
-           zstd))
-    (propagated-inputs (list glib-networking
-                             gnupg
-                             gsettings-desktop-schemas
-                             ;; The following are listed in Requires.private of
-                             ;; `flatpak.pc'.
-                             curl
-                             dconf
-                             gpgme
-                             json-glib
-                             libarchive
-                             libseccomp
-                             libxau))
-    (home-page "https://flatpak.org")
-    (synopsis "System for building, distributing, and running sandboxed desktop
+                (substitute* "tests/libtest.sh"
+                  (("/bin/kill") (which "kill"))
+                  (("/usr/bin/python3") (which "python3")))
+                #t))
+            (add-after 'unpack 'p11-kit-fix
+              (lambda* (#:key inputs #:allow-other-keys)
+                (let ((p11-path (search-input-file inputs "/bin/p11-kit")))
+                  (substitute* "session-helper/flatpak-session-helper.c"
+                    (("\"p11-kit\",")
+                     (string-append "\"" p11-path "\","))
+                    (("if \\(g_find_program_in_path \\(\"p11-kit\"\\)\\)")
+                     (string-append "if (g_find_program_in_path (\""
+                                    p11-path "\"))"))))))
+            (add-after 'unpack 'fix-icon-validation
+              (lambda* (#:key outputs #:allow-other-keys)
+                (let* ((out (assoc-ref outputs "out"))
+                       (store (dirname out)))
+                  (substitute* "icon-validator/validate-icon.c"
+                    (("@storeDir@") store)))))
+            (add-before 'check 'pre-check
+              (lambda _
+                ;; Set $HOME to writable location for testcommon tests.
+                (setenv "HOME" "/tmp")))
+            (add-after 'install 'wrap-flatpak
+              (lambda* (#:key inputs #:allow-other-keys)
+                (let ((flatpak (string-append #$output "/bin/flatpak"))
+                      (glib-networking (assoc-ref inputs "glib-networking")))
+                  (wrap-program flatpak
+                    ;; Prevent error:
+                    ;; "No GSettings schemas are installed on the system"
+                    `("GSETTINGS_SCHEMA_DIR" =
+                      (, (string-append
+                          #$(this-package-input "gsettings-desktop-schemas")
+                          "/share/glib-2.0/schemas")))
+                    ;; Allow GIO to find TLS backend.
+                    `("GIO_EXTRA_MODULES" prefix
+                      (,(string-append glib-networking "/lib/gio/modules"))))))))))
+      (native-inputs
+       (list bison
+             dbus ; for dbus-daemon
+             gettext-minimal
+             `(,glib "bin") ; for glib-mkenums + gdbus-codegen
+             gtk-doc
+             (libc-utf8-locales-for-target)
+             gobject-introspection
+             libcap
+             pkg-config
+             python
+             python-pyparsing
+             socat
+             which))
+      (inputs
+       (list appstream
+             appstream-glib
+             bash-minimal
+             bubblewrap
+             curl
+             fuse
+             gsettings-desktop-schemas
+             gdk-pixbuf
+             libcap
+             libostree
+             libsoup-minimal-2
+             libxml2
+             p11-kit
+             polkit
+             util-linux
+             xdg-dbus-proxy
+             zstd))
+      (propagated-inputs (list glib-networking
+                               gnupg
+                               gsettings-desktop-schemas
+                               ;; The following are listed in Requires.private of
+                               ;; `flatpak.pc'.
+                               curl
+                               dconf
+                               gpgme
+                               json-glib
+                               libarchive
+                               libseccomp
+                               libxau))
+      (home-page "https://flatpak.org")
+      (synopsis "System for building, distributing, and running sandboxed desktop
 applications")
-    (description "Flatpak is a system for building, distributing, and running
+      (description "Flatpak is a system for building, distributing, and running
 sandboxed desktop applications on GNU/Linux.")
-    (license license:lgpl2.1+)))
+      (license license:lgpl2.1+))))
 
 (define-public fpm
   (package
