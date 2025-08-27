@@ -86,7 +86,7 @@
   #:use-module (guix build-system python)
   #:use-module (guix build-system qt))
 
-(define %telegram-version "5.12.3")
+(define %telegram-version "5.12.4")
 
 (define libyuv-for-telegram-desktop
   (let ((commit "04821d1e7d60845525e8db55c7bcd41ef5be9406")
@@ -451,7 +451,7 @@ and not propagated to upstream.")
        (file-name
         (git-file-name name version))
        (sha256
-        (base32 "16dfk36xfsizrxmxcid9kwj2dvxfp42382hqcan9rsrgjlqm6ymy"))
+        (base32 "19kwdy1gjiw2cv0jjkynv4q107wi6l4ahzg35aldrblic9qcb3xj"))
        (patches
         (search-patches
          ;; https://github.com/telegramdesktop/tdesktop/pull/24126
