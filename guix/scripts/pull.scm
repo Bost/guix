@@ -829,7 +829,7 @@ Use '~/.config/guix/channels.scm' instead."))
 @command{sudo -i} or equivalent if you really want to pull as ~a.")
                        dir:user our:user)))))))))))
 
-(define (channels-with-validations downgradable-candidates channels)
+(define (channels-with-validations downgradable-candidates current-channels)
   "Return a list of pairs: channel + validate-pull procedure. The procedure
 is `warn-about-backward-updates' if a given channel is among the
 DOWNGRADABLE-CANDIDATES or `ensure-forward-channel-update' otherwise. E.g.:
@@ -838,31 +838,32 @@ DOWNGRADABLE-CANDIDATES or `ensure-forward-channel-update' otherwise. E.g.:
  (channel2 . #<procedure ensure-forward-channel-update ...>))"
   (cond
    ((and (list? downgradable-candidates) (not (null? downgradable-candidates)))
+    ;; (format #t "### 1. (list? downgradable-candidates) : ~a\n" (list? downgradable-candidates))
+    ;; (format #t "### 1. (not (null? downgradable-candidates)) : ~a\n" (not (null? downgradable-candidates)))
     (let ((downgradables-candidate-names (map string->symbol
                                               downgradable-candidates))
-          (channels-names (map channel-name channels)))
-      (map (lambda (name)
-             (unless (member name channels-names)
-               (leave (G_ "'~a' must be one of '~a~'%") name channels-names)))
-           downgradables-candidate-names)
+          (current-channels-names (map channel-name current-channels)))
       (let* ((downgradables-names
               (filter (cut member <> downgradables-candidate-names)
-                      channels-names))
+                      current-channels-names))
              (downgradables
               (filter (compose (cut member <> downgradables-names)
                                (cut channel-name <>))
-                      channels))
-             (non-downgradables (lset-difference equal? channels
+                      current-channels))
+             (non-downgradables (lset-difference equal? current-channels
                                                  downgradables)))
         (append
          (map (cut cons <> warn-about-backward-updates) downgradables)
          (map (cut cons <> ensure-forward-channel-update) non-downgradables)))))
 
    ((and (boolean? downgradable-candidates) downgradable-candidates)
-    (map (cut cons <> warn-about-backward-updates) channels))
+    ;; (format #t "### 2. (boolean? downgradable-candidates): ~a\n" (boolean? downgradable-candidates))
+    ;; (format #t "### 2. downgradable-candidates: ~a\n" downgradable-candidates)
+    (map (cut cons <> warn-about-backward-updates) current-channels))
 
    (else
-    (map (cut cons <> ensure-forward-channel-update) channels))))
+    ;; (format #t "### 3.\n")
+    (map (cut cons <> ensure-forward-channel-update) current-channels))))
 
 
 (define-command (guix-pull . args)
@@ -893,6 +894,25 @@ DOWNGRADABLE-CANDIDATES or `ensure-forward-channel-update' otherwise. E.g.:
          ;; Bail out early when users accidentally run, e.g., ’sudo guix pull’.
          ;; If CACHE-DIRECTORY doesn't yet exist, test where it would end up.
          (validate-cache-directory-ownership)
+
+         ;; downgradable channel membership check
+         (let ((downgradable-candidates allow-downgrades))
+           (when (and (list? downgradable-candidates) (not (null? downgradable-candidates)))
+             (let ((downgradables-candidate-names (map string->symbol
+                                                       downgradable-candidates))
+                   (current-channels-names (map channel-name current-channels)))
+               ;; this check must be done outside of (with-store ...) otherwise
+               ;; the `guix describe` outside of the guix shell will report just
+               ;; one channel when it fails
+               (map (lambda (current-channel-name)
+                      (unless (member current-channel-name current-channels-names)
+                        (leave (G_ "'~a' must be one of the ~a current-channels ~a~%")
+                               current-channel-name
+                               (length current-channels)
+                               current-channels-names)))
+                    downgradables-candidate-names)
+               ;; (format #t "### downgradable channel membership check done\n")
+               )))
 
          (with-store store
            (with-status-verbosity (assoc-ref opts 'verbosity)
