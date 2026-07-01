@@ -110,6 +110,7 @@
   #:use-module (gnu packages golang-xyz)
   #:use-module (gnu packages golang-check)
   #:use-module (gnu packages gtk)
+  #:use-module (gnu packages guile)
   #:use-module (gnu packages imagemagick)
   #:use-module (gnu packages image)
   #:use-module (gnu packages libcanberra)
@@ -140,6 +141,7 @@
   #:use-module (gnu packages tls)
   #:use-module (gnu packages version-control)
   #:use-module (gnu packages vulkan)
+  #:use-module (gnu packages wm)
   #:use-module (gnu packages xdisorg)
   #:use-module (gnu packages xml)
   #:use-module (gnu packages xorg)
@@ -1749,7 +1751,7 @@ support.  It's based on VTE and aimed at power users.")
      (origin
        (method git-fetch)
        (uri (git-reference (url "https://salsa.debian.org/debian/fbterm.git")
-			   (commit (string-append "upstream/" version))))
+                           (commit (string-append "upstream/" version))))
        (file-name (git-file-name name version))
        (sha256
         (base32
@@ -2054,3 +2056,208 @@ records, without needing to run as @code{root} or be installed setuid
 themselves.")
     ;; See libutempter/COPYING in the source tree.
     (license license:lgpl2.1+)))
+
+;; Guake logs (and swallows) a few harmless exceptions on every launch;
+;; this is expected behavior of the upstream Python code, not a sign of a
+;; packaging problem here:
+;;
+;; - "org.guake3.RemoteControl was not provided by any .service files":
+;;   guake always asks the session bus whether another instance already
+;;   owns this name before starting its own.  The installed
+;;   org.guake3.RemoteControl.service normally lets D-Bus auto-activate
+;;   guake on demand (e.g. from guake-toggle bound to a key), but only
+;;   once guake is installed into a profile whose share/dbus-1/services
+;;   is already covered by the session bus's servicedirs.  On a first
+;;   launch, or when running the raw /gnu/store output directly, there is
+;;   nothing to activate yet, so the lookup always misses; guake catches
+;;   this and starts normally.
+;; - "Schema from old guake version detected" / "Failed to create file
+;;   .../gschemas.compiled...: Read-only file system": guake compares a
+;;   schema-version GSettings key against its own version and, unable to
+;;   confirm a match, tries to recompile schemas in place -- which can
+;;   never succeed since /gnu/store is read-only.  Also caught; guake
+;;   proceeds with the schemas already compiled at build time.
+;;
+;; Silencing either would require patching guake's Python sources
+;; upstream (e.g. guake/guake_app.py), not changes to this definition.
+(define-public guake
+  (package
+    (name "guake")
+    (version "3.10.1")
+    (source
+     (origin
+       (method git-fetch)
+       (uri (git-reference
+             (url "https://github.com/Guake/guake")
+             (commit version)))
+       (file-name (git-file-name name version))
+       (sha256
+        (base32
+         "0kmd85ld77fhpdmmgpk4ppi6szv13s51j2g7bbljdv9pwcjxac2d"))))
+    (build-system pyproject-build-system)
+    ;; C/GObject-introspection libraries end up in the resulting binary.
+    (inputs
+     (list guile-3.0
+           glib
+           dconf                        ; GSettings dconf backend
+           gsettings-desktop-schemas    ; for org.gnome.desktop.interface
+           gtk+
+           gdk-pixbuf
+           gobject-introspection        ; for cairo-1.0.typelib
+           harfbuzz
+           at-spi2-core
+           keybinder
+           libnotify
+           libutempter
+           libwnck
+           vte/gtk+-3
+           pango))
+    ;; Python packages, plus glib:bin, added to the user's profile.
+    (propagated-inputs
+     (list
+      ;; guake calls glib-compile-schemas directly at runtime and crashes
+      ;; (uncaught FileNotFoundError) if it isn't on $PATH
+      (list glib "bin")                ; glib-compile-schemas
+      python-dbus
+      python-pycairo
+      python-pygobject
+      python-pyinotify
+      python-pyyaml))
+    (native-inputs
+     (list
+      python-setuptools
+      python-wheel
+      python-installer
+      python-pypa-build
+      python-setuptools-scm))
+    (arguments
+     (list
+      #:tests? #f                       ; no test suite
+      #:imported-modules
+      `((guix build glib-or-gtk-build-system)
+        ,@%pyproject-build-system-modules)
+      #:modules
+      '((guix build pyproject-build-system)
+        ((guix build glib-or-gtk-build-system) #:prefix glib:)
+        (guix build utils)
+        (srfi srfi-26))
+      #:phases
+      #~(modify-phases %standard-phases
+          ;; Avoid setuptools-scm querying VCS/network.
+          (add-before 'build 'freeze-version
+            (lambda _
+              (setenv "SETUPTOOLS_SCM_PRETEND_VERSION" #$version)
+              (setenv "SETUPTOOLS_SCM_NO_LOCAL" "1")))
+          ;; Write absolute paths into guake/paths.py.
+          (add-after 'unpack 'prepare-paths
+            (lambda* (#:key outputs #:allow-other-keys)
+              (define (as-str s) (format #f "\"~a\"" s))
+              (let* ((share     (string-append #$output "/share"))
+                     (guake-dir (string-append share "/guake"))
+                     (pixmaps   (string-append guake-dir "/pixmaps"))
+                     (schemas   (string-append share "/glib-2.0/schemas"))
+                     (theme     (string-append guake-dir "/guake"))
+                     (autostart (string-append guake-dir "/autostart")))
+                (substitute* "guake/paths.py.in"
+                  (("\\{\\{ LOCALE_DIR \\}\\}")        (as-str share))
+                  (("\\{\\{ IMAGE_DIR \\}\\}")         (as-str pixmaps))
+                  (("\\{\\{ GLADE_DIR \\}\\}")         (as-str guake-dir))
+                  (("\\{\\{ SCHEMA_DIR \\}\\}")        (as-str schemas))
+                  (("\\{\\{ GUAKE_THEME_DIR \\}\\}")   (as-str theme))
+                  (("\\{\\{ AUTOSTART_FOLDER \\}\\}")  (as-str autostart))
+                  (("\\{\\{ LOGIN_DESTOP_PATH \\}\\}") (as-str guake-dir)))
+                (copy-file "guake/paths.py.in" "guake/paths.py")
+                (for-each mkdir-p
+                          (list guake-dir pixmaps schemas theme autostart)))))
+          ;; Install UI files & schema (wheel sometimes misses these paths).
+          (add-after 'install 'install-data-and-schemas
+            (lambda* (#:key outputs #:allow-other-keys)
+              (let* ((share   (string-append #$output "/share"))
+                     (guake   (string-append share "/guake"))
+                     (pixmaps (string-append guake "/pixmaps"))
+                     (schemas (string-append share "/glib-2.0/schemas")))
+                (mkdir-p guake)
+                (mkdir-p pixmaps)
+                (mkdir-p schemas)
+                (for-each (cut install-file <> guake)
+                          (list "guake/data/guake.glade"
+                                "guake/data/about.glade"
+                                "guake/data/prefs.glade"
+                                "guake/data/search.glade"))
+                (for-each (cut install-file <> pixmaps)
+                          (find-files "guake/data/pixmaps" "\\.png$"))
+                (install-file "guake/data/org.guake.gschema.xml" schemas))))
+          ;; Compile schemas & do the standard GTK wrap.
+          (add-after 'install-data-and-schemas 'glib-or-gtk-compile-schemas
+            (assoc-ref glib:%standard-phases 'glib-or-gtk-compile-schemas))
+          (add-after 'wrap 'glib-or-gtk-wrap
+            (assoc-ref glib:%standard-phases 'glib-or-gtk-wrap))
+          ;; The install-dbus-service phase leads to ~25 seconds delay, which
+          ;; seems like 'D-Bus auto-activation timeout'
+          ;; Install a D-Bus service so org.guake3.RemoteControl can auto-activate.
+          (add-after 'glib-or-gtk-wrap 'install-dbus-service
+            (lambda* (#:key outputs #:allow-other-keys)
+              (let ((svc-dir (string-append #$output "/share/dbus-1/services")))
+                (mkdir-p svc-dir)
+                (call-with-output-file
+                    (string-append svc-dir "/org.guake3.RemoteControl.service")
+                  (lambda (port)
+                    (format port "[D-BUS Service]~%")
+                    (format port "Name=org.guake3.RemoteControl~%")
+                    (format port "Exec=~a/bin/guake~%" #$output))))))
+          ;; Prepend all GI dirs and libs.
+          (add-after 'glib-or-gtk-wrap 'wrap-gi
+            (lambda* (#:key inputs outputs #:allow-other-keys)
+              (define lst-gi-dirs
+                '(("at-spi2-core"          "/lib/girepository-1.0")
+                  ("gdk-pixbuf"            "/lib/girepository-1.0")
+                  ("glib"                  "/lib/girepository-1.0")
+                  ("gobject-introspection" "/lib/girepository-1.0")
+                  ("gtk+"                  "/lib/girepository-1.0")
+                  ("harfbuzz"              "/lib/girepository-1.0")
+                  ("keybinder"             "/lib/girepository-1.0")
+                  ("libnotify"             "/lib/girepository-1.0")
+                  ("libwnck"               "/lib/girepository-1.0")
+                  ("pango"                 "/lib/girepository-1.0")
+                  ("vte-with-gtk+3"        "/lib/girepository-1.0")))
+              (define filter-dirs
+                (compose
+                 (cut filter (lambda (x) (and x (file-exists? x))) <>)
+                 (cut map (cut apply
+                               (lambda (key suffix)
+                                 (let ((val (assoc-ref inputs key)))
+                                   (and val (string-append val suffix))))
+                               <>)
+                      <>)))
+              (let* ((bindir (string-append #$output "/bin"))
+                     ;; Absolute path to Guile for the shebang.
+                     (guile-bin (or (search-input-file inputs "bin/guile")
+                                    (error "Missing 'guile' in inputs")))
+                     (gi-dirs  (filter-dirs lst-gi-dirs))
+                     (lib-dirs (filter-dirs (append
+                                             lst-gi-dirs
+                                             '(("libutempter" "/lib"))))))
+                ((compose
+                  ;; Augment the existing wrapper (which is a shell script)
+                  ;; by prepending a Guile stub that exports our vars.
+                  (cut map
+                       (cut wrap-script <>
+                            #:guile guile-bin
+                            `("GI_TYPELIB_PATH" ":" prefix ,gi-dirs)
+                            `("LD_LIBRARY_PATH" ":" prefix ,lib-dirs)
+                            ;; Ensure D-Bus sees #$output/share/dbus-1/services.
+                            `("XDG_DATA_DIRS"   ":"
+                              prefix (,(string-append #$output "/share"))))
+                       <>)
+                  ;; Only wrap actual entry points, not dotfiles or *-real.
+                  (cut filter file-exists? <>)
+                  (cut map (cut string-append bindir <>) <>))
+                 (list "/guake" "/guake-toggle"))))))))
+    (home-page "https://github.com/Guake/guake")
+    (synopsis "Drop-down terminal for GNOME")
+    (description
+     "Guake is a drop-down terminal for the GNOME desktop environment,
+inspired by the terminals in first-person shooter games.  It slides down
+from the top of the screen on a keypress (@kbd{F12} by default) and
+retracts when dismissed.")
+    (license license:gpl2+)))
