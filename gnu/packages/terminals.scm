@@ -46,6 +46,7 @@
 ;;; Copyright © 2025 Liam Hupfer <liam@hpfr.net>
 ;;; Copyright © 2026 Janneke Nieuwenhuizen <janneke@gnu.org>
 ;;; Copyright © 2026 Nemin <bergengocia@protonmail.com>
+;;; Copyright © 2026 Rostislav Svoboda <Rostislav.Svoboda@posteo.net>
 ;;;
 ;;; This file is part of GNU Guix.
 ;;;
@@ -78,6 +79,7 @@
   #:use-module (guix packages)
   #:use-module (guix utils)
   #:use-module (gnu packages)
+  #:use-module (gnu packages admin)
   #:use-module (gnu packages assembly)
   #:use-module (gnu packages autotools)
   #:use-module (gnu packages base)
@@ -2001,3 +2003,54 @@ color schemes.
 @item Hyperlinks.
 @end itemize")
       (license license:expat))))
+
+(define-public libutempter
+  (package
+    (name "libutempter")
+    (version "1.2.3-alt1")
+    (source
+     (origin
+       (method git-fetch)
+       (uri (git-reference
+             (url "https://github.com/altlinux/libutempter")
+             (commit version)))
+       (file-name (git-file-name name version))
+       (sha256
+        (base32
+         "0hidchf1s4rcw506grnqvd3b76j1nv0p9msmqznylz7k8n45j90a"))))
+    (build-system gnu-build-system)
+    (arguments
+     (list
+      #:tests? #f                      ;no test suite
+      #:make-flags
+      #~(list (string-append "CC=" #$(cc-for-target))
+              (string-append "PREFIX=" #$output)
+              (string-append "LIBDIR=" #$output "/lib")
+              (string-append "LIBEXECDIR=" #$output "/libexec"))
+      #:phases
+      #~(modify-phases %standard-phases
+          (delete 'configure)           ;no configure script
+          (add-after 'unpack 'chdir-to-source
+            (lambda _ (chdir "libutempter")))
+          (add-after 'chdir-to-source 'fix-hardcoded-paths
+            (lambda _
+              (substitute* "Makefile"
+                (("/usr/lib") "$(LIBDIR)")
+                (("/usr/include") "$(PREFIX)/include")
+                (("/usr/share/man") "$(PREFIX)/share/man"))))
+          (add-before 'install 'create-directories
+            (lambda _
+              (mkdir-p (string-append #$output "/lib"))
+              (mkdir-p (string-append #$output "/include"))
+              (mkdir-p (string-append #$output "/share/man/man3")))))))
+    ;; Authentication-related tools such as passwd, su, and login.
+    (inputs (list shadow))
+    (home-page "https://github.com/altlinux/libutempter")
+    (synopsis "Library for utmp/wtmp session recording")
+    (description
+     "Libutempter is a privileged helper library that lets unprivileged
+terminal emulators register and remove @file{utmp}/@file{wtmp} session
+records, without needing to run as @code{root} or be installed setuid
+themselves.")
+    ;; See libutempter/COPYING in the source tree.
+    (license license:lgpl2.1+)))
